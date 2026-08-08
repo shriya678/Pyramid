@@ -1,0 +1,331 @@
+// Task Management System — Prisma schema
+// Single source of truth for the Postgres data model.
+// See ../../docs/erd.md for the visual diagram and design notes.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- Enums ----------
+
+enum Priority {
+  NONE
+  URGENT
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum Role {
+  OWNER
+  ADMIN
+  MEMBER
+}
+
+enum ResourceType {
+  LINK
+  FILE
+}
+
+enum ActivityType {
+  TASK_CREATED
+  TASK_UPDATED
+  STATUS_CHANGED
+  PRIORITY_CHANGED
+  DUE_DATE_CHANGED
+  MEMBER_ADDED
+  MEMBER_REMOVED
+  LABEL_ADDED
+  LABEL_REMOVED
+  COMMENT_ADDED
+  RESOURCE_ADDED
+  USER_UPDATE
+}
+
+enum ThemeMode {
+  LIGHT
+  DARK
+}
+
+enum AccentColor {
+  AMBER
+  BLUE
+  PINK
+  ROSE
+  EMERALD
+  BLACK
+}
+
+enum DefaultView {
+  BOARD
+  LIST
+}
+
+enum NotificationType {
+  MENTION
+}
+
+// ---------- Models ----------
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String?
+  googleId     String?  @unique
+  isGuest      Boolean  @default(false)
+  isSeeded     Boolean  @default(false)
+  fullName     String
+  username     String   @unique
+  title        String?
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  ownedWorkspaces     Workspace[]       @relation("WorkspaceOwner")
+  memberships         WorkspaceMember[]
+  leadingProjects     Project[]         @relation("ProjectLead")
+  reportedTasks       Task[]            @relation("TaskReporter")
+  assignedTasks       TaskAssignee[]
+  comments            Comment[]         @relation("CommentAuthor")
+  activities          Activity[]        @relation("ActivityActor")
+  uploadedResources   Resource[]        @relation("ResourceUploader")
+  refreshTokens       RefreshToken[]
+  preference          UserPreference?
+  notifications       Notification[]    @relation("NotificationRecipient")
+  actedNotifications  Notification[]    @relation("NotificationActor")
+
+  @@map("users")
+}
+
+model RefreshToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@map("refresh_tokens")
+}
+
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  ownerId   String
+  owner     User     @relation("WorkspaceOwner", fields: [ownerId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members  WorkspaceMember[]
+  statuses Status[]
+  projects Project[]
+  tasks    Task[]
+  labels   Label[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  workspaceId String
+  userId      String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role        Role      @default(MEMBER)
+  joinedAt    DateTime  @default(now())
+
+  @@id([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+model Status {
+  id          String    @id @default(cuid())
+  workspaceId String
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  color       String
+  order       Float
+  tasks       Task[]
+  createdAt   DateTime  @default(now())
+
+  @@unique([workspaceId, name])
+  @@index([workspaceId, order])
+  @@map("statuses")
+}
+
+model Project {
+  id           String    @id @default(cuid())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name         String
+  description  String?
+  priority     Priority  @default(NONE)
+  leadUserId   String?
+  leadUser     User?     @relation("ProjectLead", fields: [leadUserId], references: [id], onDelete: SetNull)
+  dueDate      DateTime?
+  orderIndex   Float     @default(0)
+  tasks        Task[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([workspaceId])
+  @@map("projects")
+}
+
+model Task {
+  id             String    @id @default(cuid())
+  workspaceId    String
+  workspace      Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  projectId      String?
+  project        Project?  @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  parentTaskId   String?
+  parentTask     Task?     @relation("Subtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks       Task[]    @relation("Subtasks")
+  statusId       String
+  status         Status    @relation(fields: [statusId], references: [id])
+  title          String
+  description    String?
+  priority       Priority  @default(NONE)
+  reporterId     String
+  reporter       User      @relation("TaskReporter", fields: [reporterId], references: [id])
+  startDate      DateTime?
+  dueDate        DateTime?
+  orderInColumn  Float     @default(0)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  assignees  TaskAssignee[]
+  labels     TaskLabel[]
+  comments   Comment[]
+  resources  Resource[]
+  activities Activity[]
+
+  @@index([workspaceId, statusId, orderInColumn])
+  @@index([projectId])
+  @@index([parentTaskId])
+  @@index([dueDate])
+  @@map("tasks")
+}
+
+model TaskAssignee {
+  taskId     String
+  userId     String
+  task       Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  assignedAt DateTime @default(now())
+
+  @@id([taskId, userId])
+  @@index([userId])
+  @@map("task_assignees")
+}
+
+model Label {
+  id          String      @id @default(cuid())
+  workspaceId String
+  workspace   Workspace   @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  name        String
+  color       String
+  tasks       TaskLabel[]
+  createdAt   DateTime    @default(now())
+
+  @@unique([workspaceId, name])
+  @@map("labels")
+}
+
+model TaskLabel {
+  taskId  String
+  labelId String
+  task    Task  @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label   Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, labelId])
+  @@index([labelId])
+  @@map("task_labels")
+}
+
+model Comment {
+  id              String    @id @default(cuid())
+  taskId          String
+  task            Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId        String
+  author          User      @relation("CommentAuthor", fields: [authorId], references: [id])
+  body            String
+  parentCommentId String?
+  parentComment   Comment?  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
+  replies         Comment[] @relation("CommentReplies")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([taskId])
+  @@index([parentCommentId])
+  @@map("comments")
+}
+
+model Resource {
+  id             String       @id @default(cuid())
+  taskId         String
+  task           Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  type           ResourceType
+  url            String?
+  cloudinaryKey  String?
+  name           String
+  mimeType       String?
+  sizeBytes      Int?
+  uploadedById   String
+  uploadedBy     User         @relation("ResourceUploader", fields: [uploadedById], references: [id])
+  createdAt      DateTime     @default(now())
+
+  @@index([taskId])
+  @@map("resources")
+}
+
+model Activity {
+  id        String       @id @default(cuid())
+  taskId    String
+  task      Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  actorId   String
+  actor     User         @relation("ActivityActor", fields: [actorId], references: [id])
+  type      ActivityType
+  payload   Json
+  createdAt DateTime     @default(now())
+
+  @@index([taskId, createdAt])
+  @@map("activities")
+}
+
+model UserPreference {
+  userId                 String      @id
+  user                   User        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme                  ThemeMode   @default(LIGHT)
+  accentColor            AccentColor @default(BLUE)
+  defaultView            DefaultView @default(BOARD)
+  boardFieldsShown       Json        @default("{}")
+  listFieldsShown        Json        @default("{}")
+  projectListFieldsShown Json        @default("{}")
+
+  @@map("user_preferences")
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation("NotificationRecipient", fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  taskId    String?
+  commentId String?
+  actorId   String
+  actor     User             @relation("NotificationActor", fields: [actorId], references: [id])
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, readAt])
+  @@map("notifications")
+}

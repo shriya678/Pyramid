@@ -1,0 +1,69 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    name: Lint + Typecheck + Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: task_mgmt
+          POSTGRES_PASSWORD: task_mgmt_dev
+          POSTGRES_DB: task_mgmt
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U task_mgmt -d task_mgmt"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://task_mgmt:task_mgmt_dev@localhost:5432/task_mgmt?schema=public
+      NODE_ENV: test
+      JWT_SECRET: ci-only-secret
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate Prisma client
+        run: pnpm --filter api exec prisma generate
+
+      - name: Apply Prisma migrations
+        run: pnpm --filter api exec prisma migrate deploy
+
+      - name: Typecheck
+        run: pnpm --recursive typecheck
+
+      - name: Lint
+        run: pnpm --recursive lint
+
+      - name: Test (backend service unit tests)
+        run: pnpm --filter api test

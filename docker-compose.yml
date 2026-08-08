@@ -1,0 +1,23 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: task-mgmt-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: task_mgmt
+      POSTGRES_PASSWORD: task_mgmt_dev
+      POSTGRES_DB: task_mgmt
+    ports:
+      # Host 5433 → container 5432. Host port bumped to 5433 to avoid conflict
+      # with native Windows PostgreSQL installs that occupy 5432 by default.
+      - '5433:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U task_mgmt -d task_mgmt']
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
