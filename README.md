@@ -105,9 +105,9 @@ See `apps/api/.env.example` and `apps/web/.env.example` for the full list with d
 
 ## Docs
 
-- **[Requirements checklist](./docs/REQUIREMENTS.md)** — every feature from the Figma, tiered P0/P1/P2.
 - **[ER diagram](./docs/erd.md)** — data model with Mermaid diagram and design notes.
 - **[Architecture](./docs/architecture.md)** — system diagram, auth sequence diagrams, file upload flow.
+- **[Deployment guide](./docs/DEPLOY.md)** — step-by-step signup + provisioning for Neon, Cloudinary, Sentry, Render, Vercel, Google Cloud.
 
 ---
 
