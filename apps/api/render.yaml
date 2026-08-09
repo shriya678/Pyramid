@@ -10,9 +10,12 @@ services:
     region: oregon
     # Blueprint from repo root — pnpm workspaces need the whole tree
     rootDir: .
+    # --config.minimum-release-age=0 overrides Render's default supply-chain
+    # age policy (env var) that otherwise blocks packages published in the
+    # last ~24 hours. CLI flag has highest precedence in pnpm's config chain.
     buildCommand: |
       corepack enable && \
-      pnpm install --frozen-lockfile && \
+      pnpm install --frozen-lockfile --config.minimum-release-age=0 && \
       pnpm --filter api exec prisma generate && \
       pnpm --filter api build
     startCommand: |
