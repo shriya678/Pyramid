@@ -1,3 +1,21 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+
+# pnpm 10 blocks postinstall build scripts by default (supply-chain safeguard)
+# and errors ERR_PNPM_IGNORED_BUILDS if any package needs one. This allowlist
+# permits the packages our stack legitimately requires:
+#   - @prisma/*, prisma — download engines + generate client
+#   - @sentry/cli — source-map upload during next build
+#   - unrs-resolver — module resolution used by next / eslint
+#   - @scarf/scarf — telemetry ping from a transitive dep, harmless
+#
+# NB: pnpm 10 prefers this location over package.json's `pnpm` field, and on
+# some corepack-pulled pnpm versions the package.json variant is ignored.
+onlyBuiltDependencies:
+  - '@prisma/client'
+  - '@prisma/engines'
+  - '@scarf/scarf'
+  - '@sentry/cli'
+  - 'prisma'
+  - 'unrs-resolver'
