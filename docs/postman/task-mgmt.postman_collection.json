@@ -22,7 +22,9 @@
     { "key": "workspaceSlug", "value": "", "type": "string" },
     { "key": "createdStatusId", "value": "", "type": "string" },
     { "key": "defaultStatusId", "value": "", "type": "string" },
-    { "key": "createdLabelId", "value": "", "type": "string" }
+    { "key": "createdLabelId", "value": "", "type": "string" },
+    { "key": "createdProjectId", "value": "", "type": "string" },
+    { "key": "currentUserId", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -136,7 +138,9 @@
                   "pm.test('is guest', () => pm.expect(body.isGuest).to.eql(true));",
                   "pm.test('primaryWorkspace matches captured slug', () => {",
                   "  pm.expect(body.primaryWorkspace.slug).to.eql(pm.collectionVariables.get('workspaceSlug'));",
-                  "});"
+                  "});",
+                  "// Capture the user's id so later tests can use it as a workspace-member leadUserId.",
+                  "pm.collectionVariables.set('currentUserId', body.id);"
                 ]
               }
             }
@@ -737,7 +741,354 @@
       ]
     },
     {
-      "name": "6. Logout + revocation",
+      "name": "6. Projects",
+      "item": [
+        {
+          "name": "GET /workspaces/:slug/projects (list, starts empty)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "projects"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create project (with self as lead)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Homepage Redesign\",\n  \"description\": \"Ship the new marketing site\",\n  \"priority\": \"HIGH\",\n  \"leadUserId\": \"{{currentUserId}}\",\n  \"dueDate\": \"2026-12-31T00:00:00.000Z\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "projects"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('fields set correctly', () => {",
+                  "  pm.expect(b.name).to.eql('Homepage Redesign');",
+                  "  pm.expect(b.priority).to.eql('HIGH');",
+                  "  pm.expect(b.leadUserId).to.eql(pm.collectionVariables.get('currentUserId'));",
+                  "  pm.expect(b.orderIndex).to.be.a('number');",
+                  "});",
+                  "pm.collectionVariables.set('createdProjectId', b.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create with non-member leadUserId → 400",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Bad Lead\",\n  \"leadUserId\": \"not-a-real-user-id\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "projects"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mentions non-member', () => pm.expect(JSON.stringify(pm.response.json())).to.match(/member|lead/i));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET :id (detail)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/projects/{{createdProjectId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "projects", "{{createdProjectId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('has expected shape', () => {",
+                  "  const b = pm.response.json();",
+                  "  pm.expect(b).to.include.keys('id', 'name', 'priority', 'leadUserId', 'dueDate', 'orderIndex', 'createdAt', 'updatedAt');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH rename + change priority",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Homepage v2\",\n  \"priority\": \"MEDIUM\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/projects/{{createdProjectId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "projects", "{{createdProjectId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.expect(b.name).to.eql('Homepage v2');",
+                  "pm.expect(b.priority).to.eql('MEDIUM');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH clear leadUserId (null)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"leadUserId\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/projects/{{createdProjectId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "projects", "{{createdProjectId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('lead cleared', () => pm.expect(pm.response.json().leadUserId).to.eql(null));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE project",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/projects/{{createdProjectId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "projects", "{{createdProjectId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('ok:true', () => pm.expect(pm.response.json().ok).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "7. Preferences",
+      "item": [
+        {
+          "name": "GET /me/preferences (defaults first time)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/me/preferences",
+              "host": ["{{baseUrl}}"],
+              "path": ["me", "preferences"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('has default theme + accent', () => {",
+                  "  pm.expect(b.theme).to.be.oneOf(['LIGHT', 'DARK']);",
+                  "  pm.expect(b.accentColor).to.be.a('string');",
+                  "  pm.expect(b.defaultView).to.be.oneOf(['BOARD', 'LIST']);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH theme + accent (upsert)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"theme\": \"DARK\",\n  \"accentColor\": \"EMERALD\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/me/preferences",
+              "host": ["{{baseUrl}}"],
+              "path": ["me", "preferences"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.expect(b.theme).to.eql('DARK');",
+                  "pm.expect(b.accentColor).to.eql('EMERALD');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET again (verify persisted)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/me/preferences",
+              "host": ["{{baseUrl}}"],
+              "path": ["me", "preferences"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.expect(b.theme).to.eql('DARK');",
+                  "pm.expect(b.accentColor).to.eql('EMERALD');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH invalid accent → 400",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"accentColor\": \"NEON-PINK\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/me/preferences",
+              "host": ["{{baseUrl}}"],
+              "path": ["me", "preferences"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH boardFieldsShown (JSON blob replaces wholesale)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"boardFieldsShown\": { \"priority\": true, \"dueDate\": true, \"labels\": false }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/me/preferences",
+              "host": ["{{baseUrl}}"],
+              "path": ["me", "preferences"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.expect(b.boardFieldsShown).to.eql({ priority: true, dueDate: true, labels: false });",
+                  "// Unrelated fields untouched.",
+                  "pm.expect(b.theme).to.eql('DARK');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "8. Logout + revocation",
       "item": [
         {
           "name": "POST /auth/logout (revokes current refresh)",
