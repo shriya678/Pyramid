@@ -12,6 +12,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { HealthModule } from './modules/health/health.module';
 import { DebugModule } from './modules/debug/debug.module';
+import { WorkspacesModule } from './modules/workspaces/workspaces.module';
 
 const isProd = process.env.NODE_ENV === 'production';
 
@@ -31,6 +32,7 @@ const isProd = process.env.NODE_ENV === 'production';
     PrismaModule,
     SentryModule,
     AuthModule,
+    WorkspacesModule,
     HealthModule,
     // Debug endpoints are dev-only. Excluded from the production bundle at runtime.
     ...(isProd ? [] : [DebugModule]),
