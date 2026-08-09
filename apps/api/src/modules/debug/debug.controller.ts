@@ -1,11 +1,14 @@
 import { Controller, Get, NotFoundException } from '@nestjs/common';
 import { ApiExcludeController } from '@nestjs/swagger';
+import { Public } from '../auth/decorators/public.decorator';
 
 /**
  * Development-only debug endpoints. Registered conditionally in AppModule
- * (only when NODE_ENV !== 'production'). Hidden from Swagger.
+ * (only when NODE_ENV !== 'production'). Hidden from Swagger. Marked @Public
+ * so we can trigger them without setting up a Bearer token.
  */
 @ApiExcludeController()
+@Public()
 @Controller('debug')
 export class DebugController {
   @Get('sentry-error')
