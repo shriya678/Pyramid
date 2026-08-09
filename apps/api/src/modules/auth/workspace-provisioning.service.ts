@@ -19,7 +19,7 @@ const SEEDED_TEAMMATES: Array<{ fullName: string; username: string; title: strin
  * Turns a freshly-created User into a fully usable workspace: their own
  * Workspace (they're OWNER), the four default Statuses so the board renders,
  * a UserPreference row with defaults, and 3 seeded fake teammates so the
- * assignee dropdown is populated on Day 1.
+ * assignee dropdown is populated from the moment they sign in.
  *
  * Called by AuthService both from the guest flow and (later) the Google flow
  * for first-time users.

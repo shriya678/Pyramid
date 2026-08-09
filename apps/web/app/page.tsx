@@ -24,7 +24,7 @@ export default async function HomePage() {
         <header className="mb-10">
           <h1 className="text-3xl font-semibold tracking-tight">Task Management System</h1>
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">
-            Day 2 hello-world. Confirms the frontend can reach the backend end to end.
+            Bootstrap hello-world. Confirms the frontend can reach the backend end to end.
           </p>
         </header>
 
@@ -68,7 +68,7 @@ export default async function HomePage() {
         </section>
 
         <p className="mt-8 text-xs text-zinc-500 dark:text-zinc-500">
-          This page is a temporary Day 2 scaffold. It gets replaced by the login screen and
+          This page is a temporary bootstrap scaffold. It gets replaced by the login screen and
           workspace shell in the following PRs.
         </p>
       </div>
