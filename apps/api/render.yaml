@@ -1,0 +1,64 @@
+# Render Blueprint for the NestJS API service.
+# Import this via Render dashboard: New → Blueprint → point at this repo → this file.
+# See https://render.com/docs/blueprint-spec
+
+services:
+  - type: web
+    name: task-mgmt-api
+    runtime: node
+    plan: free
+    region: oregon
+    # Blueprint from repo root — pnpm workspaces need the whole tree
+    rootDir: .
+    buildCommand: |
+      corepack enable && \
+      pnpm install --frozen-lockfile && \
+      pnpm --filter api exec prisma generate && \
+      pnpm --filter api build
+    startCommand: |
+      pnpm --filter api exec prisma migrate deploy && \
+      pnpm --filter api start:prod
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: '22'
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: '4000'
+      # --- Fill these in via the Render dashboard, do NOT commit real values ---
+      - key: DATABASE_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_ACCESS_TTL
+        value: 15m
+      - key: JWT_REFRESH_TTL
+        value: 30d
+      - key: FRONTEND_URL
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GOOGLE_CALLBACK_URL
+        sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
+      - key: CLOUDINARY_UPLOAD_PRESET
+        value: task_mgmt_uploads
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: production
+      - key: SENTRY_TRACES_SAMPLE_RATE
+        value: '0.1'
+      - key: THROTTLE_TTL_MS
+        value: '60000'
+      - key: THROTTLE_LIMIT
+        value: '100'
