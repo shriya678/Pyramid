@@ -8,6 +8,8 @@ import { loggerConfig } from './common/logger/logger.config';
 import { RequestIdMiddleware } from './common/middleware/request-id.middleware';
 import { SentryModule } from './common/sentry/sentry.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { AuthModule } from './modules/auth/auth.module';
+import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { HealthModule } from './modules/health/health.module';
 import { DebugModule } from './modules/debug/debug.module';
 
@@ -28,14 +30,21 @@ const isProd = process.env.NODE_ENV === 'production';
     ]),
     PrismaModule,
     SentryModule,
+    AuthModule,
     HealthModule,
     // Debug endpoints are dev-only. Excluded from the production bundle at runtime.
     ...(isProd ? [] : [DebugModule]),
   ],
   providers: [
+    // Order matters: throttler first (cheap, kills bots before touching auth),
+    // then JWT auth (which respects @Public()). Both run on every request.
     {
       provide: APP_GUARD,
       useClass: ThrottlerGuard,
+    },
+    {
+      provide: APP_GUARD,
+      useClass: JwtAuthGuard,
     },
   ],
 })
