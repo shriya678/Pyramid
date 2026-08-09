@@ -58,7 +58,7 @@ export class SentryExceptionFilter implements ExceptionFilter {
     const body =
       typeof message === 'string'
         ? { statusCode: status, message, requestId: req.id }
-        : { ...(message as object), statusCode: status, requestId: req.id };
+        : { ...message, statusCode: status, requestId: req.id };
 
     httpAdapter.reply(res, body, status);
   }
