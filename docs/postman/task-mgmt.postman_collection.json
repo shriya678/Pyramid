@@ -24,7 +24,9 @@
     { "key": "defaultStatusId", "value": "", "type": "string" },
     { "key": "createdLabelId", "value": "", "type": "string" },
     { "key": "createdProjectId", "value": "", "type": "string" },
-    { "key": "currentUserId", "value": "", "type": "string" }
+    { "key": "currentUserId", "value": "", "type": "string" },
+    { "key": "createdTaskId", "value": "", "type": "string" },
+    { "key": "createdSubtaskId", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -1088,7 +1090,343 @@
       ]
     },
     {
-      "name": "8. Logout + revocation",
+      "name": "8. Tasks",
+      "item": [
+        {
+          "name": "GET tasks (empty at first)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('is an array', () => pm.expect(pm.response.json()).to.be.an('array'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create task (uses defaultStatusId from Statuses folder)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Write API documentation\",\n  \"description\": \"Long-form details about the tasks endpoints\",\n  \"statusId\": \"{{defaultStatusId}}\",\n  \"priority\": \"HIGH\",\n  \"assigneeIds\": [\"{{currentUserId}}\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('task shape', () => {",
+                  "  pm.expect(b.title).to.eql('Write API documentation');",
+                  "  pm.expect(b.priority).to.eql('HIGH');",
+                  "  pm.expect(b.assignees.map(a => a.id)).to.include(pm.collectionVariables.get('currentUserId'));",
+                  "  pm.expect(b.subtaskCount).to.eql(0);",
+                  "  pm.expect(b.reporterId).to.eql(pm.collectionVariables.get('currentUserId'));",
+                  "});",
+                  "pm.collectionVariables.set('createdTaskId', b.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create with non-member assignee → 400",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Bad assignee\",\n  \"statusId\": \"{{defaultStatusId}}\",\n  \"assigneeIds\": [\"not-a-real-user\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mentions non-member', () => pm.expect(JSON.stringify(pm.response.json())).to.match(/workspace|member/i));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create with invalid statusId → 400",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Bad status\",\n  \"statusId\": \"not-a-real-status\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET task detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{createdTaskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks", "{{createdTaskId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.expect(b).to.include.keys('assignees', 'labels', 'subtaskCount');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH change priority + description",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"priority\": \"URGENT\",\n  \"description\": \"Updated description\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{createdTaskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks", "{{createdTaskId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().priority).to.eql('URGENT');"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH clear assignees (empty array)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"assigneeIds\": []\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{createdTaskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks", "{{createdTaskId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('assignees cleared', () => pm.expect(pm.response.json().assignees).to.eql([]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create subtask",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Section: authentication\",\n  \"statusId\": \"{{defaultStatusId}}\",\n  \"parentTaskId\": \"{{createdTaskId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('has parentTaskId', () => pm.expect(b.parentTaskId).to.eql(pm.collectionVariables.get('createdTaskId')));",
+                  "pm.collectionVariables.set('createdSubtaskId', b.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST subtask of subtask → 400 (max depth 1)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Too deep\",\n  \"statusId\": \"{{defaultStatusId}}\",\n  \"parentTaskId\": \"{{createdSubtaskId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mentions depth', () => pm.expect(JSON.stringify(pm.response.json())).to.match(/depth|subtask/i));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET tasks with q filter (finds our task)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks?q=documentation",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks"],
+              "query": [{ "key": "q", "value": "documentation" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const list = pm.response.json();",
+                  "pm.test('finds our task', () => pm.expect(list.map(t => t.id)).to.include(pm.collectionVariables.get('createdTaskId')));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET tasks?parentTaskId=<id> returns subtasks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks?parentTaskId={{createdTaskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks"],
+              "query": [{ "key": "parentTaskId", "value": "{{createdTaskId}}" }]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const list = pm.response.json();",
+                  "pm.test('returns just the subtask', () => {",
+                  "  pm.expect(list).to.have.lengthOf(1);",
+                  "  pm.expect(list[0].id).to.eql(pm.collectionVariables.get('createdSubtaskId'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE task (subtask cascades)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{createdTaskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks", "{{createdTaskId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('ok:true', () => pm.expect(pm.response.json().ok).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "9. Logout + revocation",
       "item": [
         {
           "name": "POST /auth/logout (revokes current refresh)",
