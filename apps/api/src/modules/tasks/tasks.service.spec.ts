@@ -322,7 +322,10 @@ describe('TasksService', () => {
 
   beforeEach(() => {
     prisma = makeMockPrisma();
-    service = new TasksService(prisma as unknown as PrismaService, new ActivityService());
+    service = new TasksService(
+      prisma as unknown as PrismaService,
+      new ActivityService(prisma as unknown as PrismaService),
+    );
   });
 
   // ---------------------------------------------------------------------------
