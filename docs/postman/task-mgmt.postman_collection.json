@@ -26,7 +26,10 @@
     { "key": "createdProjectId", "value": "", "type": "string" },
     { "key": "currentUserId", "value": "", "type": "string" },
     { "key": "createdTaskId", "value": "", "type": "string" },
-    { "key": "createdSubtaskId", "value": "", "type": "string" }
+    { "key": "createdSubtaskId", "value": "", "type": "string" },
+    { "key": "commentsTaskId", "value": "", "type": "string" },
+    { "key": "topCommentId", "value": "", "type": "string" },
+    { "key": "replyCommentId", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -1426,7 +1429,287 @@
       ]
     },
     {
-      "name": "9. Logout + revocation",
+      "name": "9. Comments",
+      "item": [
+        {
+          "name": "POST create a task for comments testing",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Discussion thread\",\n  \"statusId\": \"{{defaultStatusId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('commentsTaskId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET comments (empty at first)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{commentsTaskId}}/comments",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks", "{{commentsTaskId}}", "comments"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('empty', () => pm.expect(pm.response.json()).to.eql([]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST top-level comment",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"Kicking off the discussion.\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{commentsTaskId}}/comments",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks", "{{commentsTaskId}}", "comments"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('has author + null parent', () => {",
+                  "  pm.expect(b.author.id).to.eql(pm.collectionVariables.get('currentUserId'));",
+                  "  pm.expect(b.parentCommentId).to.eql(null);",
+                  "});",
+                  "pm.collectionVariables.set('topCommentId', b.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST reply to top-level",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"Replying to the first one.\",\n  \"parentCommentId\": \"{{topCommentId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{commentsTaskId}}/comments",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks", "{{commentsTaskId}}", "comments"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('parentCommentId set', () => {",
+                  "  pm.expect(b.parentCommentId).to.eql(pm.collectionVariables.get('topCommentId'));",
+                  "});",
+                  "pm.collectionVariables.set('replyCommentId', b.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST reply-of-reply → 400 (one level only)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"Too deep\",\n  \"parentCommentId\": \"{{replyCommentId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{commentsTaskId}}/comments",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks", "{{commentsTaskId}}", "comments"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mentions depth', () => pm.expect(JSON.stringify(pm.response.json())).to.match(/one level|reply/i));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET comments (verify threading)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{commentsTaskId}}/comments",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks", "{{commentsTaskId}}", "comments"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const list = pm.response.json();",
+                  "pm.test('1 top-level with 1 nested reply', () => {",
+                  "  pm.expect(list).to.have.lengthOf(1);",
+                  "  pm.expect(list[0].id).to.eql(pm.collectionVariables.get('topCommentId'));",
+                  "  pm.expect(list[0].replies).to.have.lengthOf(1);",
+                  "  pm.expect(list[0].replies[0].id).to.eql(pm.collectionVariables.get('replyCommentId'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH edit own reply",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"body\": \"Edited reply text\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{commentsTaskId}}/comments/{{replyCommentId}}",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "workspaces",
+                "{{workspaceSlug}}",
+                "tasks",
+                "{{commentsTaskId}}",
+                "comments",
+                "{{replyCommentId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.expect(pm.response.json().body).to.eql('Edited reply text');"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "10. Activity",
+      "item": [
+        {
+          "name": "GET /activity for the comments task",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{commentsTaskId}}/activity",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks", "{{commentsTaskId}}", "activity"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const feed = pm.response.json();",
+                  "pm.test('has TASK_CREATED', () => {",
+                  "  pm.expect(feed.some(e => e.type === 'TASK_CREATED')).to.be.true;",
+                  "});",
+                  "pm.test('has at least two COMMENT_ADDED events (top + reply)', () => {",
+                  "  const count = feed.filter(e => e.type === 'COMMENT_ADDED').length;",
+                  "  pm.expect(count).to.be.at.least(2);",
+                  "});",
+                  "pm.test('newest first', () => {",
+                  "  const ts = feed.map(e => new Date(e.createdAt).getTime());",
+                  "  const sorted = [...ts].sort((a,b) => b-a);",
+                  "  pm.expect(ts).to.eql(sorted);",
+                  "});",
+                  "pm.test('actor hydrated', () => {",
+                  "  pm.expect(feed[0].actor).to.include.keys('id', 'username', 'fullName');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE comments task (cleanup — cascades comments + activity)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{commentsTaskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks", "{{commentsTaskId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "11. Logout + revocation",
       "item": [
         {
           "name": "POST /auth/logout (revokes current refresh)",
