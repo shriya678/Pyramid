@@ -12,6 +12,8 @@ import { AuthModule } from './modules/auth/auth.module';
 import { JwtAuthGuard } from './modules/auth/guards/jwt-auth.guard';
 import { HealthModule } from './modules/health/health.module';
 import { DebugModule } from './modules/debug/debug.module';
+import { ActivityModule } from './modules/activity/activity.module';
+import { CommentsModule } from './modules/comments/comments.module';
 import { LabelsModule } from './modules/labels/labels.module';
 import { PreferencesModule } from './modules/preferences/preferences.module';
 import { ProjectsModule } from './modules/projects/projects.module';
@@ -42,6 +44,8 @@ const isProd = process.env.NODE_ENV === 'production';
     LabelsModule,
     ProjectsModule,
     TasksModule,
+    CommentsModule,
+    ActivityModule,
     PreferencesModule,
     HealthModule,
     // Debug endpoints are dev-only. Excluded from the production bundle at runtime.
