@@ -4,7 +4,17 @@ import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Priority, Role } from '@prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import type { WorkspaceContext } from '../workspaces/guards/workspace-member.guard';
+import type { ProjectAccessService } from './project-access.service';
 import { ProjectsService } from './projects.service';
+
+/** Permissive ProjectAccessService stub — every caller sees every project.
+ *  These tests predate COLLABORATOR; project-access.service.spec.ts covers
+ *  the restricted paths. */
+const noopAccess = {
+  getVisibleProjectIds: async () => null,
+  assertCanAccessProject: async () => undefined,
+  assertCanAccessTask: async () => undefined,
+} as unknown as ProjectAccessService;
 
 interface ProjectRow {
   id: string;
@@ -117,7 +127,13 @@ function makeMockPrisma() {
   return prisma;
 }
 
-const owner: WorkspaceContext = { id: 'ws-1', slug: 'w', name: 'W', role: Role.OWNER };
+const owner: WorkspaceContext = {
+  id: 'ws-1',
+  slug: 'w',
+  name: 'W',
+  role: Role.OWNER,
+  userId: 'user-1',
+};
 const member: WorkspaceContext = { ...owner, role: Role.MEMBER };
 
 function makeProject(id: string, orderIndex: number, workspaceId = 'ws-1'): ProjectRow {
@@ -141,7 +157,7 @@ describe('ProjectsService', () => {
 
   beforeEach(() => {
     prisma = makeMockPrisma();
-    service = new ProjectsService(prisma as unknown as PrismaService);
+    service = new ProjectsService(prisma as unknown as PrismaService, noopAccess);
   });
 
   describe('list', () => {

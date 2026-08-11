@@ -137,6 +137,7 @@ const ownerCtx: WorkspaceContext = {
   slug: 'w',
   name: 'W',
   role: Role.OWNER,
+  userId: 'user-1',
 };
 const memberCtx: WorkspaceContext = { ...ownerCtx, role: Role.MEMBER };
 

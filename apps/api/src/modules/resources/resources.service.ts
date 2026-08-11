@@ -7,6 +7,7 @@ import {
 import { ActivityType, ResourceType, Role, type Resource, type User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
+import { ProjectAccessService } from '../projects/project-access.service';
 import type { WorkspaceContext } from '../workspaces/guards/workspace-member.guard';
 import { CloudinaryService, type CloudinarySignedUpload } from './cloudinary.service';
 import type { CreateResourceDto } from './dto/create-resource.dto';
@@ -61,6 +62,7 @@ export class ResourcesService {
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
     private readonly cloudinary: CloudinaryService,
+    private readonly access: ProjectAccessService,
   ) {}
 
   async list(ctx: WorkspaceContext, taskId: string): Promise<ResourceResponse[]> {
@@ -178,9 +180,10 @@ export class ResourcesService {
   private async requireTaskInWorkspace(ctx: WorkspaceContext, taskId: string): Promise<void> {
     const found = await this.prisma.task.findFirst({
       where: { id: taskId, workspaceId: ctx.id },
-      select: { id: true },
+      select: { workspaceId: true, projectId: true },
     });
     if (!found) throw new NotFoundException('Task not found');
+    await this.access.assertCanAccessTask(ctx, found);
   }
 
   private async loadResourceOnTask(taskId: string, resourceId: string): Promise<Resource> {

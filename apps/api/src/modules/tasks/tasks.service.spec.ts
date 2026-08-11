@@ -5,8 +5,16 @@ import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { ActivityType, Priority, Role } from '@prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
+import type { ProjectAccessService } from '../projects/project-access.service';
 import type { WorkspaceContext } from '../workspaces/guards/workspace-member.guard';
 import { TasksService } from './tasks.service';
+
+/** Permissive stub — see projects.service.spec.ts for the rationale. */
+const noopAccess = {
+  getVisibleProjectIds: async () => null,
+  assertCanAccessProject: async () => undefined,
+  assertCanAccessTask: async () => undefined,
+} as unknown as ProjectAccessService;
 
 interface TaskRow {
   id: string;
@@ -295,7 +303,13 @@ function makeMockPrisma(): MockPrisma {
   return prisma;
 }
 
-const ws1: WorkspaceContext = { id: 'ws-1', slug: 'w', name: 'W', role: Role.OWNER };
+const ws1: WorkspaceContext = {
+  id: 'ws-1',
+  slug: 'w',
+  name: 'W',
+  role: Role.OWNER,
+  userId: 'user-1',
+};
 
 function makeTaskRow(overrides: Partial<TaskRow>): TaskRow {
   return {
@@ -325,6 +339,7 @@ describe('TasksService', () => {
     service = new TasksService(
       prisma as unknown as PrismaService,
       new ActivityService(prisma as unknown as PrismaService),
+      noopAccess,
     );
   });
 

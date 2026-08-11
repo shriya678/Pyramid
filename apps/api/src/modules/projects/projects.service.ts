@@ -9,6 +9,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 import type { WorkspaceContext } from '../workspaces/guards/workspace-member.guard';
 import type { CreateProjectDto } from './dto/create-project.dto';
 import type { UpdateProjectDto } from './dto/update-project.dto';
+import { ProjectAccessService } from './project-access.service';
 
 export interface ProjectResponse {
   id: string;
@@ -38,25 +39,36 @@ const toResponse = (p: Project): ProjectResponse => ({
 
 @Injectable()
 export class ProjectsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly access: ProjectAccessService,
+  ) {}
 
   async list(ctx: WorkspaceContext): Promise<ProjectResponse[]> {
+    const where: Prisma.ProjectWhereInput = { workspaceId: ctx.id };
+    const visible = await this.access.getVisibleProjectIds(ctx);
+    if (visible !== null) where.id = { in: visible };
     const rows = await this.prisma.project.findMany({
-      where: { workspaceId: ctx.id },
+      where,
       orderBy: { orderIndex: 'asc' },
     });
     return rows.map(toResponse);
   }
 
   async getById(ctx: WorkspaceContext, projectId: string): Promise<ProjectResponse> {
+    await this.access.assertCanAccessProject(ctx, projectId);
     const row = await this.loadInWorkspace(ctx, projectId);
     return toResponse(row);
   }
 
   /**
-   * Create. Any workspace member can start a project.
+   * Create. OWNER/ADMIN/MEMBER only — a COLLABORATOR is scoped to specific
+   * projects and shouldn't be creating workspace-wide ones.
    */
   async create(ctx: WorkspaceContext, dto: CreateProjectDto): Promise<ProjectResponse> {
+    if (ctx.role === Role.COLLABORATOR) {
+      throw new ForbiddenException('Collaborators cannot create projects');
+    }
     if (dto.leadUserId) {
       await this.requireLeadIsMember(ctx, dto.leadUserId);
     }

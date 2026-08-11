@@ -13,12 +13,17 @@ import type { AuthenticatedUser } from '../../auth/strategies/jwt.strategy';
 /**
  * Resolved workspace context attached to `req.workspace` after this guard runs.
  * Downstream handlers pull it via @CurrentWorkspace().
+ *
+ * `userId` is copied from the JWT for downstream convenience so services
+ * scoping by (workspace, user) — like ProjectAccessService — don't have to
+ * separately inject the current user.
  */
 export interface WorkspaceContext {
   id: string;
   slug: string;
   name: string;
   role: Role;
+  userId: string;
 }
 
 /**
@@ -73,6 +78,7 @@ export class WorkspaceMemberGuard implements CanActivate {
       slug: membership.workspace.slug,
       name: membership.workspace.name,
       role: membership.role,
+      userId: user.id,
     };
 
     return true;
