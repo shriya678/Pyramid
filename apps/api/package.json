@@ -42,6 +42,7 @@
     "@task-mgmt/shared": "workspace:*",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
+    "cloudinary": "^2.10.0",
     "helmet": "^8.3.0",
     "ms": "^2.1.3",
     "nestjs-pino": "^4.6.1",

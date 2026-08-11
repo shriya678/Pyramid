@@ -29,7 +29,10 @@
     { "key": "createdSubtaskId", "value": "", "type": "string" },
     { "key": "commentsTaskId", "value": "", "type": "string" },
     { "key": "topCommentId", "value": "", "type": "string" },
-    { "key": "replyCommentId", "value": "", "type": "string" }
+    { "key": "replyCommentId", "value": "", "type": "string" },
+    { "key": "resourcesTaskId", "value": "", "type": "string" },
+    { "key": "createdLinkResourceId", "value": "", "type": "string" },
+    { "key": "createdFileResourceId", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -1709,7 +1712,371 @@
       ]
     },
     {
-      "name": "11. Logout + revocation",
+      "name": "11. Resources",
+      "item": [
+        {
+          "name": "POST create a task for resources testing",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Attachments test\",\n  \"statusId\": \"{{defaultStatusId}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('resourcesTaskId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET resources (empty at first)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{resourcesTaskId}}/resources",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "workspaces",
+                "{{workspaceSlug}}",
+                "tasks",
+                "{{resourcesTaskId}}",
+                "resources"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('empty', () => pm.expect(pm.response.json()).to.eql([]));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create LINK resource",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"LINK\",\n  \"name\": \"Figma design\",\n  \"url\": \"https://figma.com/design/xyz\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{resourcesTaskId}}/resources",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "workspaces",
+                "{{workspaceSlug}}",
+                "tasks",
+                "{{resourcesTaskId}}",
+                "resources"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('shape', () => {",
+                  "  pm.expect(b.type).to.eql('LINK');",
+                  "  pm.expect(b.url).to.eql('https://figma.com/design/xyz');",
+                  "  pm.expect(b.cloudinaryKey).to.eql(null);",
+                  "  pm.expect(b.uploadedBy.id).to.eql(pm.collectionVariables.get('currentUserId'));",
+                  "});",
+                  "pm.collectionVariables.set('createdLinkResourceId', b.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST LINK without url → 400",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"LINK\",\n  \"name\": \"No url\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{resourcesTaskId}}/resources",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "workspaces",
+                "{{workspaceSlug}}",
+                "tasks",
+                "{{resourcesTaskId}}",
+                "resources"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /sign-upload (returns cloudinary params)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{resourcesTaskId}}/resources/sign-upload",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "workspaces",
+                "{{workspaceSlug}}",
+                "tasks",
+                "{{resourcesTaskId}}",
+                "resources",
+                "sign-upload"
+              ]
+            },
+            "description": "Returns Cloudinary signed upload params. Requires CLOUDINARY_CLOUD_NAME / _API_KEY / _API_SECRET on the backend — 500 otherwise."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('has all sign params', () => {",
+                  "  pm.expect(b).to.include.keys('cloudName', 'apiKey', 'timestamp', 'signature', 'folder', 'uploadUrl');",
+                  "  pm.expect(b.folder).to.match(/tasks\\/[a-z0-9]+/);",
+                  "  pm.expect(b.type).to.eql('authenticated');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST create FILE (with synthetic cloudinaryKey)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"FILE\",\n  \"name\": \"screenshot.png\",\n  \"cloudinaryKey\": \"task_mgmt_uploads/tasks/synthetic/abc123\",\n  \"mimeType\": \"image/png\",\n  \"sizeBytes\": 12345\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{resourcesTaskId}}/resources",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "workspaces",
+                "{{workspaceSlug}}",
+                "tasks",
+                "{{resourcesTaskId}}",
+                "resources"
+              ]
+            },
+            "description": "Uses a synthetic cloudinaryKey — no actual upload happens. Real flow: sign-upload → browser POSTs file to Cloudinary → register here with the returned public_id."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('shape', () => {",
+                  "  pm.expect(b.type).to.eql('FILE');",
+                  "  pm.expect(b.cloudinaryKey).to.eql('task_mgmt_uploads/tasks/synthetic/abc123');",
+                  "  pm.expect(b.url).to.eql(null);",
+                  "  pm.expect(b.mimeType).to.eql('image/png');",
+                  "  pm.expect(b.sizeBytes).to.eql(12345);",
+                  "});",
+                  "pm.collectionVariables.set('createdFileResourceId', b.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /:id/url for LINK → 400",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{resourcesTaskId}}/resources/{{createdLinkResourceId}}/url",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "workspaces",
+                "{{workspaceSlug}}",
+                "tasks",
+                "{{resourcesTaskId}}",
+                "resources",
+                "{{createdLinkResourceId}}",
+                "url"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mentions LINK/FILE', () => pm.expect(JSON.stringify(pm.response.json())).to.match(/LINK|FILE/i));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /:id/url for FILE (returns 5-min signed URL)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{resourcesTaskId}}/resources/{{createdFileResourceId}}/url",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "workspaces",
+                "{{workspaceSlug}}",
+                "tasks",
+                "{{resourcesTaskId}}",
+                "resources",
+                "{{createdFileResourceId}}",
+                "url"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('has url + expiresInSeconds', () => {",
+                  "  pm.expect(b.url).to.be.a('string');",
+                  "  pm.expect(b.url).to.include('cloudinary');",
+                  "  pm.expect(b.expiresInSeconds).to.eql(300);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE FILE resource (as uploader)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{resourcesTaskId}}/resources/{{createdFileResourceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "workspaces",
+                "{{workspaceSlug}}",
+                "tasks",
+                "{{resourcesTaskId}}",
+                "resources",
+                "{{createdFileResourceId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('ok:true', () => pm.expect(pm.response.json().ok).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE LINK resource (as uploader)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{resourcesTaskId}}/resources/{{createdLinkResourceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "workspaces",
+                "{{workspaceSlug}}",
+                "tasks",
+                "{{resourcesTaskId}}",
+                "resources",
+                "{{createdLinkResourceId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE resources task (cleanup)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{resourcesTaskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "tasks", "{{resourcesTaskId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('200 OK', () => pm.response.to.have.status(200));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "12. Logout + revocation",
       "item": [
         {
           "name": "POST /auth/logout (revokes current refresh)",

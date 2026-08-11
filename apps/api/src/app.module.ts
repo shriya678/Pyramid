@@ -17,6 +17,7 @@ import { CommentsModule } from './modules/comments/comments.module';
 import { LabelsModule } from './modules/labels/labels.module';
 import { PreferencesModule } from './modules/preferences/preferences.module';
 import { ProjectsModule } from './modules/projects/projects.module';
+import { ResourcesModule } from './modules/resources/resources.module';
 import { StatusesModule } from './modules/statuses/statuses.module';
 import { TasksModule } from './modules/tasks/tasks.module';
 import { WorkspacesModule } from './modules/workspaces/workspaces.module';
@@ -45,6 +46,7 @@ const isProd = process.env.NODE_ENV === 'production';
     ProjectsModule,
     TasksModule,
     CommentsModule,
+    ResourcesModule,
     ActivityModule,
     PreferencesModule,
     HealthModule,
