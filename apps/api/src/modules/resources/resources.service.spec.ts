@@ -5,9 +5,17 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { ActivityType, ResourceType, Role } from '@prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
+import type { ProjectAccessService } from '../projects/project-access.service';
 import type { WorkspaceContext } from '../workspaces/guards/workspace-member.guard';
 import type { CloudinaryService, CloudinarySignedUpload } from './cloudinary.service';
 import { ResourcesService } from './resources.service';
+
+/** Permissive stub — see projects.service.spec.ts for the rationale. */
+const noopAccess = {
+  getVisibleProjectIds: async () => null,
+  assertCanAccessProject: async () => undefined,
+  assertCanAccessTask: async () => undefined,
+} as unknown as ProjectAccessService;
 
 interface ResourceRow {
   id: string;
@@ -144,7 +152,13 @@ const cloudinaryStub: Pick<CloudinaryService, 'signUpload' | 'signReadUrl'> = {
   signReadUrl: (publicId: string) => `https://cloudinary.test/signed/${publicId}?ex=1234`,
 };
 
-const ws1: WorkspaceContext = { id: 'ws-1', slug: 'w', name: 'W', role: Role.OWNER };
+const ws1: WorkspaceContext = {
+  id: 'ws-1',
+  slug: 'w',
+  name: 'W',
+  role: Role.OWNER,
+  userId: 'user-1',
+};
 const memberCtx: WorkspaceContext = { ...ws1, role: Role.MEMBER };
 
 function makeResource(overrides: Partial<ResourceRow>): ResourceRow {
@@ -172,6 +186,7 @@ describe('ResourcesService', () => {
       prisma as unknown as PrismaService,
       new ActivityService(prisma as unknown as PrismaService),
       cloudinaryStub as unknown as CloudinaryService,
+      noopAccess,
     );
     prisma.__seedTask({ id: 't-1', workspaceId: 'ws-1' });
     prisma.__seedTask({ id: 't-other', workspaceId: 'ws-other' });

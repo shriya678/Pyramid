@@ -1,7 +1,13 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import {
   ActivityType,
   Priority,
+  Role,
   type Prisma,
   type Task,
   type User,
@@ -9,6 +15,7 @@ import {
 } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
+import { ProjectAccessService } from '../projects/project-access.service';
 import type { WorkspaceContext } from '../workspaces/guards/workspace-member.guard';
 import type { CreateTaskDto } from './dto/create-task.dto';
 import type { TaskListQueryDto } from './dto/task-list-query.dto';
@@ -92,6 +99,7 @@ export class TasksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
+    private readonly access: ProjectAccessService,
   ) {}
 
   // -------------------------------------------------------------------------
@@ -118,10 +126,19 @@ export class TasksService {
     if (query.priority?.length) {
       where.priority = { in: query.priority };
     }
+    // Project-visibility filter. For OWNER/ADMIN/MEMBER visible is null
+    // (no filter). For COLLABORATOR, only projects they hold ProjectMember
+    // for; orphan tasks (projectId=null) never visible to them.
+    const visible = await this.access.getVisibleProjectIds(ctx);
     if (query.projectId === 'none') {
+      if (visible !== null) return []; // COLLABORATOR: no orphans
       where.projectId = null;
     } else if (query.projectId) {
+      if (visible !== null && !visible.includes(query.projectId)) return [];
       where.projectId = query.projectId;
+    } else if (visible !== null) {
+      if (visible.length === 0) return [];
+      where.projectId = { in: visible };
     }
     if (query.labelIds?.length) {
       where.labels = { some: { labelId: { in: query.labelIds } } };
@@ -146,6 +163,10 @@ export class TasksService {
 
   async getById(ctx: WorkspaceContext, taskId: string): Promise<TaskResponse> {
     const row = await this.loadInWorkspace(ctx, taskId);
+    await this.access.assertCanAccessTask(ctx, {
+      workspaceId: row.workspaceId,
+      projectId: row.projectId,
+    });
     return toResponse(row);
   }
 
@@ -154,6 +175,10 @@ export class TasksService {
   // -------------------------------------------------------------------------
 
   async create(ctx: WorkspaceContext, actorId: string, dto: CreateTaskDto): Promise<TaskResponse> {
+    // COLLABORATOR must scope every task to a project they can access.
+    if (ctx.role === Role.COLLABORATOR && !dto.projectId) {
+      throw new ForbiddenException('Collaborators must create tasks under a project');
+    }
     await this.requireStatusInWorkspace(ctx, dto.statusId);
     if (dto.projectId) await this.requireProjectInWorkspace(ctx, dto.projectId);
     if (dto.parentTaskId) await this.requireParentTaskInWorkspace(ctx, dto.parentTaskId);
@@ -217,6 +242,15 @@ export class TasksService {
     dto: UpdateTaskDto,
   ): Promise<TaskResponse> {
     const existing = await this.loadInWorkspace(ctx, taskId);
+    await this.access.assertCanAccessTask(ctx, {
+      workspaceId: existing.workspaceId,
+      projectId: existing.projectId,
+    });
+
+    // COLLABORATOR cannot orphan a task (dto.projectId === null clears it).
+    if (ctx.role === Role.COLLABORATOR && dto.projectId === null) {
+      throw new ForbiddenException('Collaborators cannot remove a task from its project');
+    }
 
     // Validate any referenced ids before we open the transaction.
     if (dto.statusId && dto.statusId !== existing.statusId) {
@@ -384,6 +418,10 @@ export class TasksService {
 
   async delete(ctx: WorkspaceContext, taskId: string): Promise<{ ok: true }> {
     const existing = await this.loadInWorkspace(ctx, taskId);
+    await this.access.assertCanAccessTask(ctx, {
+      workspaceId: existing.workspaceId,
+      projectId: existing.projectId,
+    });
     // Subtasks cascade via schema (Task.parentTask onDelete: Cascade), same for
     // TaskAssignee / TaskLabel / Comment / Resource / Activity.
     await this.prisma.task.delete({ where: { id: existing.id } });
@@ -428,6 +466,15 @@ export class TasksService {
       select: { id: true },
     });
     if (!found) throw new BadRequestException(`projectId ${projectId} is not in this workspace`);
+    if (ctx.role === Role.COLLABORATOR) {
+      const member = await this.prisma.projectMember.findUnique({
+        where: { projectId_userId: { projectId, userId: ctx.userId } },
+        select: { projectId: true },
+      });
+      if (!member) {
+        throw new BadRequestException(`projectId ${projectId} is not accessible`);
+      }
+    }
   }
 
   private async requireParentTaskInWorkspace(

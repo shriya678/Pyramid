@@ -5,8 +5,16 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { ActivityType, Role } from '@prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
+import type { ProjectAccessService } from '../projects/project-access.service';
 import type { WorkspaceContext } from '../workspaces/guards/workspace-member.guard';
 import { CommentsService } from './comments.service';
+
+/** Permissive stub — see projects.service.spec.ts for the rationale. */
+const noopAccess = {
+  getVisibleProjectIds: async () => null,
+  assertCanAccessProject: async () => undefined,
+  assertCanAccessTask: async () => undefined,
+} as unknown as ProjectAccessService;
 
 interface CommentRow {
   id: string;
@@ -133,7 +141,13 @@ function makeMockPrisma(): MockPrisma {
   return prisma;
 }
 
-const ws1: WorkspaceContext = { id: 'ws-1', slug: 'w', name: 'W', role: Role.OWNER };
+const ws1: WorkspaceContext = {
+  id: 'ws-1',
+  slug: 'w',
+  name: 'W',
+  role: Role.OWNER,
+  userId: 'user-1',
+};
 const memberCtx: WorkspaceContext = { ...ws1, role: Role.MEMBER };
 
 function makeComment(overrides: Partial<CommentRow>): CommentRow {
@@ -157,6 +171,7 @@ describe('CommentsService', () => {
     service = new CommentsService(
       prisma as unknown as PrismaService,
       new ActivityService(prisma as unknown as PrismaService),
+      noopAccess,
     );
     prisma.__seedTask({ id: 't-1', workspaceId: 'ws-1' });
     prisma.__seedTask({ id: 't-other', workspaceId: 'ws-other' });

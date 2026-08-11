@@ -7,6 +7,7 @@ import {
 import { ActivityType, Role, type Comment, type User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
+import { ProjectAccessService } from '../projects/project-access.service';
 import type { WorkspaceContext } from '../workspaces/guards/workspace-member.guard';
 import type { CreateCommentDto } from './dto/create-comment.dto';
 import type { UpdateCommentDto } from './dto/update-comment.dto';
@@ -59,6 +60,7 @@ export class CommentsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
+    private readonly access: ProjectAccessService,
   ) {}
 
   /**
@@ -171,9 +173,10 @@ export class CommentsService {
   private async requireTaskInWorkspace(ctx: WorkspaceContext, taskId: string): Promise<void> {
     const found = await this.prisma.task.findFirst({
       where: { id: taskId, workspaceId: ctx.id },
-      select: { id: true },
+      select: { workspaceId: true, projectId: true },
     });
     if (!found) throw new NotFoundException('Task not found');
+    await this.access.assertCanAccessTask(ctx, found);
   }
 
   private async requireParentComment(taskId: string, parentCommentId: string): Promise<void> {
