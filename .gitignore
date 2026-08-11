@@ -2,6 +2,14 @@
 node_modules/
 .pnpm-store/
 
+# Stray per-package lockfiles.
+# pnpm workspaces must have a SINGLE root pnpm-lock.yaml. If `pnpm --filter <app>
+# add <pkg>` ever writes a per-app one (a known pnpm quirk that surfaces when the
+# CLI momentarily loses the workspace root), ignore it here so it can't get
+# committed and out-of-sync with the authoritative root lockfile.
+apps/*/pnpm-lock.yaml
+packages/*/pnpm-lock.yaml
+
 # Build output
 dist/
 build/
