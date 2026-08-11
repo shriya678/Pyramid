@@ -2,13 +2,11 @@
 
 A task management app inspired by Jira/Linear/Notion — Kanban board, task detail with subtasks/comments/activity, projects, custom statuses, themeable UI, and multi-user workspaces.
 
-Built as a technical assessment for a Full Stack Developer role. Deadline: 2026-08-18.
+Built as a technical assessment for a Full Stack Developer role.
 
-> **🚧 Work in progress.** Live URL and screenshots will appear here as they land.
-
-- **Live web:** _pending — will be a Vercel URL_
-- **Live API:** _pending — will be a Render URL_
-- **Swagger:** _pending — `<api-url>/api/docs`_
+- **Live web:** https://pyramid-web-sigma.vercel.app/
+- **Live API:** https://pyramid-sb7m.onrender.com/health
+- **Swagger:** https://pyramid-sb7m.onrender.com/api/docs
 
 ---
 
