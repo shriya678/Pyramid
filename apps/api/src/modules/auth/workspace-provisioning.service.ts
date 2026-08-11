@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Role, type Prisma, type User, type Workspace } from '@prisma/client';
+import { Priority, Role, type Prisma, type User, type Workspace } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 
 const DEFAULT_STATUSES: Array<{ name: string; color: string; order: number }> = [
@@ -9,11 +9,36 @@ const DEFAULT_STATUSES: Array<{ name: string; color: string; order: number }> = 
   { name: 'On Hold', color: '#f59e0b', order: 4000 },
 ];
 
-const SEEDED_TEAMMATES: Array<{ fullName: string; username: string; title: string }> = [
-  { fullName: 'Alex Chen', username: 'alex-chen', title: 'Product Designer' },
-  { fullName: 'Jamie Rivera', username: 'jamie-rivera', title: 'Backend Engineer' },
-  { fullName: 'Sam Patel', username: 'sam-patel', title: 'QA Engineer' },
+type SeededTeammate = {
+  fullName: string;
+  username: string;
+  title: string;
+  role: Role;
+};
+
+// Three full workspace members plus one COLLABORATOR — the collaborator only
+// sees the seeded demo project, giving the Members panels something realistic
+// to render out of the box.
+const SEEDED_TEAMMATES: SeededTeammate[] = [
+  { fullName: 'Alex Chen', username: 'alex-chen', title: 'Product Designer', role: Role.MEMBER },
+  {
+    fullName: 'Jamie Rivera',
+    username: 'jamie-rivera',
+    title: 'Backend Engineer',
+    role: Role.MEMBER,
+  },
+  { fullName: 'Sam Patel', username: 'sam-patel', title: 'QA Engineer', role: Role.MEMBER },
+  {
+    fullName: 'Riya Kapoor',
+    username: 'riya-kapoor',
+    title: 'External Contractor',
+    role: Role.COLLABORATOR,
+  },
 ];
+
+const DEMO_PROJECT_NAME = 'Website Redesign';
+const DEMO_PROJECT_DESCRIPTION =
+  'Redesigning the marketing site. Riya (external contractor) is a collaborator here and only sees this project.';
 
 /**
  * Turns a freshly-created User into a fully usable workspace: their own
@@ -52,7 +77,7 @@ export class WorkspaceProvisioningService {
 
       // Seeded teammates + their memberships. Marked isSeeded so we can tell
       // them apart from real users (and skip them in "invite by email" flows).
-      await Promise.all(
+      const seededUsers = await Promise.all(
         SEEDED_TEAMMATES.map((t) =>
           tx.user.create({
             data: {
@@ -64,12 +89,37 @@ export class WorkspaceProvisioningService {
               // Deterministic avatar per teammate for consistency across reloads.
               avatarUrl: `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(t.username)}`,
               memberships: {
-                create: { workspaceId: created.id, role: Role.MEMBER },
+                create: { workspaceId: created.id, role: t.role },
               },
             } satisfies Prisma.UserCreateInput,
           }),
         ),
       );
+
+      // Seed one demo Project and attach the COLLABORATOR to it via
+      // ProjectMember. Owner is the "added by" so the audit trail reads well.
+      const demoProject = await tx.project.create({
+        data: {
+          workspaceId: created.id,
+          name: DEMO_PROJECT_NAME,
+          description: DEMO_PROJECT_DESCRIPTION,
+          priority: Priority.MEDIUM,
+          orderIndex: 1000,
+        },
+      });
+
+      const collaborator = seededUsers.find(
+        (u, i) => SEEDED_TEAMMATES[i].role === Role.COLLABORATOR,
+      );
+      if (collaborator) {
+        await tx.projectMember.create({
+          data: {
+            projectId: demoProject.id,
+            userId: collaborator.id,
+            addedById: user.id,
+          },
+        });
+      }
 
       await tx.userPreference.create({
         data: { userId: user.id }, // all defaults per Prisma schema

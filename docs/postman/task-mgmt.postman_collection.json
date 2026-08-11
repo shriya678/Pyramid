@@ -32,7 +32,10 @@
     { "key": "replyCommentId", "value": "", "type": "string" },
     { "key": "resourcesTaskId", "value": "", "type": "string" },
     { "key": "createdLinkResourceId", "value": "", "type": "string" },
-    { "key": "createdFileResourceId", "value": "", "type": "string" }
+    { "key": "createdFileResourceId", "value": "", "type": "string" },
+    { "key": "membersProjectId", "value": "", "type": "string" },
+    { "key": "seededMemberEmail", "value": "", "type": "string" },
+    { "key": "currentUserEmail", "value": "", "type": "string" }
   ],
   "item": [
     {
@@ -2076,7 +2079,464 @@
       ]
     },
     {
-      "name": "12. Logout + revocation",
+      "name": "12. Workspace Members",
+      "item": [
+        {
+          "name": "GET /workspaces/:slug/members (list, capture seeded teammate email)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/members",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "members"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('has the OWNER (current user)', () => {",
+                  "  pm.expect(body.some((m) => m.role === 'OWNER' && m.userId === pm.collectionVariables.get('currentUserId'))).to.be.true;",
+                  "});",
+                  "pm.test('has three seeded MEMBERs and one COLLABORATOR', () => {",
+                  "  const members = body.filter((m) => m.role === 'MEMBER' && m.user.isSeeded);",
+                  "  const collabs = body.filter((m) => m.role === 'COLLABORATOR' && m.user.isSeeded);",
+                  "  pm.expect(members.length).to.eql(3);",
+                  "  pm.expect(collabs.length).to.eql(1);",
+                  "});",
+                  "const teammate = body.find((m) => m.role === 'MEMBER' && m.user.isSeeded);",
+                  "if (teammate) pm.collectionVariables.set('seededMemberEmail', teammate.user.email);",
+                  "const owner = body.find((m) => m.role === 'OWNER');",
+                  "if (owner) pm.collectionVariables.set('currentUserEmail', owner.user.email);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workspaces/:slug/members with unknown email → 400",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nobody-{{$timestamp}}@nowhere.test\",\n  \"role\": \"MEMBER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/members",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "members"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('message: user not found', () => {",
+                  "  pm.expect(pm.response.json().message).to.match(/user not found/i);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workspaces/:slug/members with own email → 409 (already OWNER)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{currentUserEmail}}\",\n  \"role\": \"MEMBER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/members",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "members"]
+            },
+            "description": "Verifies duplicate detection using the current user's own email (they're already OWNER)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('409 Conflict', () => pm.response.to.have.status(409));",
+                  "pm.test('mentions the existing role', () => {",
+                  "  pm.expect(pm.response.json().message).to.match(/already.*owner/i);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workspaces/:slug/members with seeded MEMBER email → 409",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{seededMemberEmail}}\",\n  \"role\": \"MEMBER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/members",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "members"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('409 Conflict', () => pm.response.to.have.status(409));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workspaces/:slug/members with role=OWNER → 400 (role restricted)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"someone@example.com\",\n  \"role\": \"OWNER\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/members",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "members"]
+            },
+            "description": "The workspace-invite endpoint restricts role to MEMBER or ADMIN — OWNER and COLLABORATOR must be born through other paths."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workspaces/:slug/members with role=COLLABORATOR → 400",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"someone@example.com\",\n  \"role\": \"COLLABORATOR\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/members",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "members"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /workspaces/:slug/members/:me → 400 (self-remove blocked)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/members/{{currentUserId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "members", "{{currentUserId}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('message: cannot remove self', () => {",
+                  "  pm.expect(pm.response.json().message).to.match(/cannot remove yourself/i);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /workspaces/:slug/members/ghost → 404",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/members/nonexistent-user-id",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "members", "nonexistent-user-id"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('404 Not Found', () => pm.response.to.have.status(404));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "13. Project Members",
+      "item": [
+        {
+          "name": "GET /workspaces/:slug/projects (capture seeded demo project id)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{workspaceSlug}}", "projects"]
+            },
+            "description": "Folder 6 deletes {{createdProjectId}} at its end, so folder 13 needs its own project reference. The seeded 'Website Redesign' project always exists in a fresh workspace — capture its id here so every subsequent request in this folder uses a project that actually exists."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const list = pm.response.json();",
+                  "pm.test('has at least one project (seeded demo)', () => pm.expect(list.length).to.be.greaterThan(0));",
+                  "const demo = list.find((p) => p.name === 'Website Redesign') || list[0];",
+                  "pm.collectionVariables.set('membersProjectId', demo.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /workspaces/:slug/projects/:id/members (list)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/projects/{{membersProjectId}}/members",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "workspaces",
+                "{{workspaceSlug}}",
+                "projects",
+                "{{membersProjectId}}",
+                "members"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('includes the current user with workspaceRole=OWNER', () => {",
+                  "  const me = body.find((m) => m.userId === pm.collectionVariables.get('currentUserId'));",
+                  "  pm.expect(me).to.exist;",
+                  "  pm.expect(me.workspaceRole).to.eql('OWNER');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workspaces/:slug/projects/:id/members with own email → alreadyHasAccess",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{currentUserEmail}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/projects/{{membersProjectId}}/members",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "workspaces",
+                "{{workspaceSlug}}",
+                "projects",
+                "{{membersProjectId}}",
+                "members"
+              ]
+            },
+            "description": "OWNER already has access via workspace tier; expect the alreadyHasAccess flag rather than a duplicate error."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('alreadyHasAccess:true', () => pm.expect(body.alreadyHasAccess).to.eql(true));",
+                  "pm.test('workspaceRole=OWNER', () => pm.expect(body.workspaceRole).to.eql('OWNER'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workspaces/:slug/projects/:id/members with seeded MEMBER email → alreadyHasAccess",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{seededMemberEmail}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/projects/{{membersProjectId}}/members",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "workspaces",
+                "{{workspaceSlug}}",
+                "projects",
+                "{{membersProjectId}}",
+                "members"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('alreadyHasAccess:true, role MEMBER', () => {",
+                  "  pm.expect(body.alreadyHasAccess).to.eql(true);",
+                  "  pm.expect(body.workspaceRole).to.eql('MEMBER');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workspaces/:slug/projects/:id/members with unknown email → 400",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"nobody-{{$timestamp}}@nowhere.test\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/projects/{{membersProjectId}}/members",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "workspaces",
+                "{{workspaceSlug}}",
+                "projects",
+                "{{membersProjectId}}",
+                "members"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /workspaces/:slug/projects/:id/members/:me → 400",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/projects/{{membersProjectId}}/members/{{currentUserId}}",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "workspaces",
+                "{{workspaceSlug}}",
+                "projects",
+                "{{membersProjectId}}",
+                "members",
+                "{{currentUserId}}"
+              ]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE .../projects/:id/members/:workspaceMember → 404 (no PM row)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/projects/{{membersProjectId}}/members/nonexistent-user",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "workspaces",
+                "{{workspaceSlug}}",
+                "projects",
+                "{{membersProjectId}}",
+                "members",
+                "nonexistent-user"
+              ]
+            },
+            "description": "Any userId who doesn't have a ProjectMember row for this project (including full workspace members, who never need one) returns 404 here."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('404 Not Found', () => pm.response.to.have.status(404));"]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "14. Logout + revocation",
       "item": [
         {
           "name": "POST /auth/logout (revokes current refresh)",
