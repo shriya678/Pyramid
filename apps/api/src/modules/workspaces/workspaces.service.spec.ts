@@ -132,6 +132,7 @@ describe('WorkspacesService', () => {
       slug: 'alice',
       name: "Alice's Workspace",
       role: Role.OWNER,
+      userId: 'alice-id',
     };
 
     it('returns workspace detail with role from the context', async () => {
@@ -153,12 +154,14 @@ describe('WorkspacesService', () => {
       slug: 'alice',
       name: "Alice's Workspace",
       role: Role.OWNER,
+      userId: 'alice-id',
     };
     const memberCtx: WorkspaceContext = {
       id: 'ws-1',
       slug: 'alice',
       name: "Alice's Workspace",
       role: Role.MEMBER,
+      userId: 'bob-id',
     };
 
     it('lets an OWNER rename', async () => {
