@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import type { Params } from 'nestjs-pino';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { REQUEST_ID_HEADER } from '../middleware/request-id.middleware';
@@ -7,6 +8,13 @@ import { REQUEST_ID_HEADER } from '../middleware/request-id.middleware';
  * in development. Request-id from RequestIdMiddleware is propagated as `reqId`
  * so every log line inside a request can be correlated with the request that
  * produced it (and with the Sentry event that shares the same request-id).
+ *
+ * `genReqId` is the single source of truth for the id — pino-http calls it
+ * before any Nest middleware runs, so the earlier design (middleware first,
+ * pino reads its output) was order-dependent and produced literal
+ * "undefined" strings when the middleware hadn't yet executed. Now we
+ * generate here and stash on `req.id`; the middleware just mirrors it into
+ * the `x-request-id` response header.
  */
 export const loggerConfig = (): Params => {
   const isProd = process.env.NODE_ENV === 'production';
@@ -15,11 +23,15 @@ export const loggerConfig = (): Params => {
     pinoHttp: {
       level: process.env.LOG_LEVEL ?? (isProd ? 'info' : 'debug'),
       genReqId: (req: IncomingMessage) => {
-        // RequestIdMiddleware has already set req.id; reuse it so pino's
-        // reqId matches the response header the client sees.
-        return (
-          (req as IncomingMessage & { id?: string }).id ?? String(req.headers[REQUEST_ID_HEADER])
-        );
+        const r = req as IncomingMessage & { id?: string };
+        if (r.id) return r.id;
+        const header = req.headers[REQUEST_ID_HEADER];
+        const id =
+          typeof header === 'string' && header.length > 0 && header.length <= 128
+            ? header
+            : randomUUID();
+        r.id = id;
+        return id;
       },
       customProps: (req: IncomingMessage) => ({
         reqId: (req as IncomingMessage & { id?: string }).id,
