@@ -41,6 +41,72 @@ const DEMO_PROJECT_DESCRIPTION =
   'Redesigning the marketing site. Riya (external contractor) is a collaborator here and only sees this project.';
 
 /**
+ * Six demo tasks spread across the four seeded statuses. The `dueDayOffset`
+ * lets us produce an overdue-looking task without hard-coding a date that
+ * would go stale.
+ *
+ *   statusName → matches the Status.name inserted above.
+ *   assigneeIdx → index into SEEDED_TEAMMATES; null means no assignee.
+ */
+const DEMO_TASKS: Array<{
+  title: string;
+  statusName: string;
+  priority: Priority;
+  dueDayOffset: number | null;
+  assigneeIdx: number | null;
+  orderInColumn: number;
+}> = [
+  {
+    title: 'Newsletter signup form',
+    statusName: 'To Do',
+    priority: Priority.URGENT,
+    dueDayOffset: -2, // overdue
+    assigneeIdx: 0, // Alex
+    orderInColumn: 1000,
+  },
+  {
+    title: 'Mobile responsive audit',
+    statusName: 'To Do',
+    priority: Priority.MEDIUM,
+    dueDayOffset: 1, // due tomorrow
+    assigneeIdx: 2, // Sam
+    orderInColumn: 2000,
+  },
+  {
+    title: 'Wireframes for hero section',
+    statusName: 'Doing',
+    priority: Priority.HIGH,
+    dueDayOffset: 5,
+    assigneeIdx: 0, // Alex
+    orderInColumn: 1000,
+  },
+  {
+    title: 'Analytics dashboard mockup',
+    statusName: 'Doing',
+    priority: Priority.HIGH,
+    dueDayOffset: null,
+    assigneeIdx: 1, // Jamie
+    orderInColumn: 2000,
+  },
+  {
+    title: 'Auth flow copy review',
+    statusName: 'Completed',
+    priority: Priority.LOW,
+    dueDayOffset: -5,
+    assigneeIdx: 3, // Riya (COLLABORATOR)
+    orderInColumn: 1000,
+  },
+  {
+    title: 'Cross-browser testing plan',
+    statusName: 'On Hold',
+    priority: Priority.NONE,
+    dueDayOffset: null,
+    assigneeIdx: 2, // Sam
+    orderInColumn: 1000,
+  },
+];
+
+/**
  * Turns a freshly-created User into a fully usable workspace: their own
  * Workspace (they're OWNER), the four default Statuses so the board renders,
  * a UserPreference row with defaults, and 3 seeded fake teammates so the
@@ -121,8 +187,44 @@ export class WorkspaceProvisioningService {
         });
       }
 
-      await tx.userPreference.create({
-        data: { userId: user.id }, // all defaults per Prisma schema
+      // Seed six demo tasks under the demo project so the board isn't empty
+      // on first login. Resolve status names to ids after Statuses were
+      // created above.
+      const statusRows = await tx.status.findMany({
+        where: { workspaceId: created.id },
+        select: { id: true, name: true },
+      });
+      const statusByName = new Map(statusRows.map((s) => [s.name, s.id]));
+      const nowMs = Date.now();
+      const dayMs = 24 * 60 * 60 * 1000;
+      for (const t of DEMO_TASKS) {
+        const statusId = statusByName.get(t.statusName);
+        if (!statusId) continue;
+        const assignee = t.assigneeIdx !== null ? seededUsers[t.assigneeIdx] : null;
+        await tx.task.create({
+          data: {
+            workspaceId: created.id,
+            projectId: demoProject.id,
+            statusId,
+            title: t.title,
+            priority: t.priority,
+            reporterId: user.id,
+            dueDate: t.dueDayOffset !== null ? new Date(nowMs + t.dueDayOffset * dayMs) : null,
+            orderInColumn: t.orderInColumn,
+            assignees: assignee ? { create: { userId: assignee.id } } : undefined,
+          },
+        });
+      }
+
+      // Upsert: re-provisioning is possible for an existing user whose
+      // workspace was deleted (edge case in AuthService.handleGoogleLogin).
+      // Their UserPreference row survives that deletion, so a fresh create
+      // would violate the userId unique constraint. Preserve whatever
+      // theme/accent they had.
+      await tx.userPreference.upsert({
+        where: { userId: user.id },
+        create: { userId: user.id }, // all defaults per Prisma schema
+        update: {},
       });
 
       return created;
