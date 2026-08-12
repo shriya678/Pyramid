@@ -6,6 +6,7 @@ import { ArrowLeft, Users } from 'lucide-react';
 import { Board } from '@/components/board/board';
 import { ProjectHeader } from '@/components/projects/project-header';
 import { ProjectMembersPanel } from '@/components/projects/project-members-panel';
+import { AddTaskModal } from '@/components/tasks/add-task-modal';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet';
 import { TopBar } from '@/components/workspace/top-bar';
@@ -46,15 +47,18 @@ export default function ProjectDetailPage({
           </Link>
         }
         actions={
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setMembersOpen(true)}
-            aria-label="Project members"
-          >
-            <Users className="mr-1.5 h-4 w-4" />
-            Members
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setMembersOpen(true)}
+              aria-label="Project members"
+            >
+              <Users className="mr-1.5 h-4 w-4" />
+              Members
+            </Button>
+            <AddTaskModal workspaceSlug={slug} defaultProjectId={id} />
+          </div>
         }
       />
       {project.isLoading ? (

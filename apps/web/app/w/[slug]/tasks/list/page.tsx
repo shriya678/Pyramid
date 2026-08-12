@@ -1,36 +1,47 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useCallback, useState } from 'react';
+import { BoardSearch } from '@/components/board/board-search';
+import { FieldsDropdown } from '@/components/board/fields-dropdown';
+import { FiltersPopover } from '@/components/board/filters-popover';
 import { ViewToggle } from '@/components/board/view-toggle';
+import { TaskList } from '@/components/list/task-list';
+import { AddTaskModal } from '@/components/tasks/add-task-modal';
 import { TopBar } from '@/components/workspace/top-bar';
+import type { TaskListQuery } from '@/lib/api/tasks';
 import { useAuthStore } from '@/lib/stores/auth-store';
 
 /**
- * Placeholder for the List view. The View toggle exists here already so the
- * follow-up "List view" PR only has to swap this card for the real list —
- * top-bar chrome and routing don't need to change.
+ * Task list view — same data as the Board, grouped into collapsible
+ * sections per status. Shares the same top-bar toolbar (search / filters /
+ * fields / view toggle) so switching between views feels seamless.
  */
 export default function TasksListPage() {
   const workspace = useAuthStore((s) => s.workspace);
+  const [query, setQuery] = useState<TaskListQuery>({});
+
+  const onSearchChange = useCallback((q: string) => {
+    setQuery((prev) => ({ ...prev, q: q || undefined }));
+  }, []);
+
   if (!workspace) return null;
+
   return (
     <>
-      <TopBar title="Tasks" actions={<ViewToggle workspaceSlug={workspace.slug} active="list" />} />
-      <div className="flex-1 overflow-auto p-4 md:p-6">
-        <div className="mx-auto max-w-3xl">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">List view — coming next</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2 text-sm text-muted-foreground">
-              <p>
-                Same tasks as the Board, but grouped by status with collapsible sections and
-                per-user column visibility. Ships in the follow-up frontend PR.
-              </p>
-              <p>Switch back to the Board via the toggle in the top-right.</p>
-            </CardContent>
-          </Card>
-        </div>
+      <TopBar
+        title="Tasks"
+        actions={
+          <div className="flex items-center gap-2">
+            <ViewToggle workspaceSlug={workspace.slug} active="list" />
+            <BoardSearch onChange={onSearchChange} />
+            <FiltersPopover workspaceSlug={workspace.slug} value={query} onChange={setQuery} />
+            <FieldsDropdown />
+            <AddTaskModal workspaceSlug={workspace.slug} />
+          </div>
+        }
+      />
+      <div className="min-h-0 flex-1 overflow-auto">
+        <TaskList workspaceSlug={workspace.slug} query={query} />
       </div>
     </>
   );

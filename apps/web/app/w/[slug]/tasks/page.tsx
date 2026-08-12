@@ -6,6 +6,7 @@ import { BoardSearch } from '@/components/board/board-search';
 import { FieldsDropdown } from '@/components/board/fields-dropdown';
 import { FiltersPopover } from '@/components/board/filters-popover';
 import { ViewToggle } from '@/components/board/view-toggle';
+import { AddTaskModal } from '@/components/tasks/add-task-modal';
 import { TopBar } from '@/components/workspace/top-bar';
 import type { TaskListQuery } from '@/lib/api/tasks';
 import { useAuthStore } from '@/lib/stores/auth-store';
@@ -39,6 +40,7 @@ export default function TasksPage() {
             <BoardSearch onChange={onSearchChange} />
             <FiltersPopover workspaceSlug={workspace.slug} value={query} onChange={setQuery} />
             <FieldsDropdown />
+            <AddTaskModal workspaceSlug={workspace.slug} />
           </div>
         }
       />
