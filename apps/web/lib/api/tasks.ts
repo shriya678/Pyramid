@@ -41,3 +41,31 @@ export async function createTask(slug: string, input: CreateTaskInput): Promise<
   const { data } = await api.post<TaskResponse>(`/workspaces/${slug}/tasks`, input);
   return data;
 }
+
+/**
+ * PATCH body for /workspaces/:slug/tasks/:id. Every field is optional —
+ * matches the backend's UpdateTaskDto. `null` on projectId / dueDate /
+ * startDate means "clear the field"; `undefined` (omitted) means "no
+ * change". assigneeIds / labelIds are declarative replacements when set.
+ */
+export interface UpdateTaskInput {
+  title?: string;
+  description?: string | null;
+  statusId?: string;
+  priority?: Priority;
+  projectId?: string | null;
+  startDate?: string | null;
+  dueDate?: string | null;
+  orderInColumn?: number;
+  assigneeIds?: string[];
+  labelIds?: string[];
+}
+
+export async function updateTask(
+  slug: string,
+  taskId: string,
+  input: UpdateTaskInput,
+): Promise<TaskResponse> {
+  const { data } = await api.patch<TaskResponse>(`/workspaces/${slug}/tasks/${taskId}`, input);
+  return data;
+}

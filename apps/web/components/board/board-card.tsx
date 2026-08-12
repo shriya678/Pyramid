@@ -1,6 +1,13 @@
 'use client';
 
+/* eslint-disable react-hooks/refs -- @dnd-kit's useSortable returns a
+   callback setNodeRef plus plain attribute/listener objects; the new
+   React 19 compiler rule flags these as "ref access during render" but
+   they're safe library-level patterns, not React refs. */
+
 import Link from 'next/link';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { cn } from '@/lib/utils';
 import type { Priority, TaskAssigneeMini, TaskLabelMini, TaskResponse } from '@/lib/api/types';
@@ -37,6 +44,20 @@ export function BoardCard({ workspaceSlug, task }: BoardCardProps) {
   const members = useWorkspaceMembers(workspaceSlug);
   const overdue = isOverdue(task);
 
+  // Sortable adapter: exposes attributes + drag listeners we attach below,
+  // plus the transform + transition that CSS uses to move the card as the
+  // user drags. `data` is echoed back on onDragEnd so the board can tell
+  // "card" events apart from "column" events.
+  const sortable = useSortable({
+    id: task.id,
+    data: { type: 'card', task },
+  });
+  const dragStyle = {
+    transform: CSS.Transform.toString(sortable.transform),
+    transition: sortable.transition,
+    opacity: sortable.isDragging ? 0.4 : undefined,
+  };
+
   const showPriority = fields.priority && task.priority !== 'NONE';
   const showLabels = fields.labels && task.labels.length > 0;
   const showDueDate = fields.dueDate && task.dueDate !== null;
@@ -52,12 +73,16 @@ export function BoardCard({ workspaceSlug, task }: BoardCardProps) {
 
   return (
     <Link
+      ref={sortable.setNodeRef}
       href={`/w/${workspaceSlug}/tasks/${task.id}`}
+      style={dragStyle}
       className={cn(
-        'group block rounded-lg border bg-card p-3 text-left shadow-sm transition-shadow',
+        'group block touch-none rounded-lg border bg-card p-3 text-left shadow-sm transition-shadow',
         'hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         overdue && fields.dueDate && 'border-red-300 dark:border-red-900/60',
       )}
+      {...sortable.attributes}
+      {...sortable.listeners}
     >
       <p className="text-sm font-medium leading-snug text-foreground">{task.title}</p>
 
