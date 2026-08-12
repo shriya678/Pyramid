@@ -1,34 +1,23 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { AddProjectModal } from '@/components/projects/add-project-modal';
+import { ProjectsList } from '@/components/projects/projects-list';
 import { TopBar } from '@/components/workspace/top-bar';
+import { useAuthStore } from '@/lib/stores/auth-store';
 
 /**
- * Placeholder for the Projects list. Sidebar links here; real table view
- * ships with the Projects CRUD frontend PR.
+ * Projects list page. Header carries the +Add Project button (mounted here
+ * so the TopBar remains a dumb slot component). The full-height grid
+ * inside is a card layout populated by useProjects.
  */
 export default function ProjectsPage() {
+  const workspace = useAuthStore((s) => s.workspace);
+  if (!workspace) return null;
   return (
     <>
-      <TopBar title="Projects" />
+      <TopBar title="Projects" actions={<AddProjectModal workspaceSlug={workspace.slug} />} />
       <div className="flex-1 overflow-auto p-4 md:p-6">
-        <div className="mx-auto max-w-3xl">
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Projects list — coming later</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm text-muted-foreground">
-              <p>
-                The Projects table + create + detail view render here in a follow-up frontend PR.
-                Backend CRUD is already live — try{' '}
-                <code className="rounded bg-muted px-1 py-0.5 text-xs">
-                  GET /workspaces/&lt;slug&gt;/projects
-                </code>{' '}
-                in the Postman collection.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+        <ProjectsList workspaceSlug={workspace.slug} />
       </div>
     </>
   );
