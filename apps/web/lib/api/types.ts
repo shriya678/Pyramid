@@ -70,3 +70,42 @@ export interface WorkspaceMemberResponse {
     isSeeded: boolean;
   };
 }
+
+export interface ProjectResponse {
+  id: string;
+  workspaceId: string;
+  name: string;
+  description: string | null;
+  priority: Priority;
+  leadUserId: string | null;
+  dueDate: string | null;
+  orderIndex: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectMemberResponse {
+  projectId: string;
+  userId: string;
+  addedById: string;
+  addedAt: string;
+  workspaceRole: Role;
+  user: {
+    id: string;
+    email: string;
+    username: string;
+    fullName: string;
+    avatarUrl: string | null;
+    isGuest: boolean;
+    isSeeded: boolean;
+  };
+}
+
+/**
+ * Response for POST /projects/:id/members. The invitee having full workspace
+ * access flows the alreadyHasAccess:true branch (no ProjectMember row); an
+ * actual COLLABORATOR add flows the false branch.
+ */
+export type AddProjectMemberResult =
+  | { alreadyHasAccess: true; workspaceRole: Role; user: ProjectMemberResponse['user'] }
+  | { alreadyHasAccess: false; member: ProjectMemberResponse; implicitWorkspaceAdd: boolean };
