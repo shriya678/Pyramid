@@ -26,22 +26,27 @@ export function TopBar({ title, actions }: TopBarProps) {
   return (
     <header
       className={cn(
-        'flex h-14 shrink-0 items-center gap-3 border-b border-border bg-background px-4 md:px-6',
+        'flex h-14 min-w-0 shrink-0 items-center gap-3 border-b border-border bg-background px-4 md:px-6',
       )}
     >
       <Button
         variant="ghost"
         size="icon"
-        className="h-8 w-8 md:hidden"
+        className="h-8 w-8 shrink-0 md:hidden"
         onClick={openMobileSidebar}
         aria-label="Open menu"
       >
         <Menu className="h-4 w-4" />
       </Button>
 
-      <h1 className="truncate text-lg font-semibold">{title}</h1>
+      <h1 className="shrink-0 truncate text-lg font-semibold">{title}</h1>
 
-      {actions ? <div className="ml-auto flex items-center gap-2">{actions}</div> : null}
+      {actions ? (
+        // Scrollable actions strip. On desktop everything fits and the strip
+        // is invisible. On narrow viewports the actions overflow horizontally
+        // inside the header instead of pushing the page sideways.
+        <div className="ml-auto flex min-w-0 items-center gap-2 overflow-x-auto">{actions}</div>
+      ) : null}
     </header>
   );
 }

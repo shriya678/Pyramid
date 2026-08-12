@@ -1,41 +1,49 @@
 'use client';
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useCallback, useState } from 'react';
+import { Board } from '@/components/board/board';
+import { BoardSearch } from '@/components/board/board-search';
+import { FieldsDropdown } from '@/components/board/fields-dropdown';
+import { FiltersPopover } from '@/components/board/filters-popover';
+import { ViewToggle } from '@/components/board/view-toggle';
 import { TopBar } from '@/components/workspace/top-bar';
+import type { TaskListQuery } from '@/lib/api/tasks';
 import { useAuthStore } from '@/lib/stores/auth-store';
 
 /**
- * Placeholder page while the Board view is being built in the next PR.
- * The workspace layout already provides sidebar + AuthGuard; here we only
- * render the top bar + content.
+ * The workspace's board view. AppShell provides sidebar + auth; TopBar
+ * renders the title (Tasks) plus board-level actions, and the Board
+ * fills the rest of the pane.
+ *
+ * `query` is hoisted here so search + filters populate the same
+ * TaskListQuery that useTasks consumes — one round-trip per change,
+ * cached per unique query shape by TanStack Query.
  */
 export default function TasksPage() {
   const workspace = useAuthStore((s) => s.workspace);
+  const [query, setQuery] = useState<TaskListQuery>({});
+
+  const onSearchChange = useCallback((q: string) => {
+    setQuery((prev) => ({ ...prev, q: q || undefined }));
+  }, []);
+
+  if (!workspace) return null;
 
   return (
     <>
-      <TopBar title="Tasks" />
-      <div className="flex-1 overflow-auto p-4 md:p-6">
-        <div className="mx-auto max-w-3xl space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Signed into <span className="font-medium text-foreground">{workspace?.name}</span>.
-          </p>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Board view — coming next PR</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <p>
-                Kanban columns, drag-and-drop, Task Detail modal, filters, and the whole Figma board
-                render into this slot in the follow-up PR.
-              </p>
-              <p>
-                Meanwhile the sidebar dropdown (top-left avatar + workspace name) gives you the
-                theme and accent color pickers — try clicking through them.
-              </p>
-            </CardContent>
-          </Card>
-        </div>
+      <TopBar
+        title="Tasks"
+        actions={
+          <div className="flex items-center gap-2">
+            <ViewToggle workspaceSlug={workspace.slug} active="board" />
+            <BoardSearch onChange={onSearchChange} />
+            <FiltersPopover workspaceSlug={workspace.slug} value={query} onChange={setQuery} />
+            <FieldsDropdown />
+          </div>
+        }
+      />
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <Board workspaceSlug={workspace.slug} query={query} />
       </div>
     </>
   );
