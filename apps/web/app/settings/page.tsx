@@ -2,16 +2,20 @@
 
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { WorkspaceMembersPanel } from '@/components/settings/workspace-members-panel';
+import { useMyWorkspaceRole } from '@/lib/hooks/use-board-data';
 import { useAuthStore } from '@/lib/stores/auth-store';
 
 /**
- * Placeholder for the full Settings screen (Figma p13). Reachable from the
- * workspace user menu's "Settings" item so that link doesn't 404 today.
- * The real page (Profile / Theme / Color / Leave Workspace) ships later.
+ * Settings screen. First live section is the Workspace Members panel —
+ * remaining sections (Profile, Theme, Color, Leave Workspace) will land
+ * in follow-up PRs. Route sits outside the workspace shell because
+ * Figma p13 gives Settings its own chrome.
  */
 export default function SettingsPage() {
   const workspace = useAuthStore((s) => s.workspace);
+  const user = useAuthStore((s) => s.user);
+  const myRole = useMyWorkspaceRole(workspace?.slug ?? '', user?.id);
   const backHref = workspace ? `/w/${workspace.slug}/tasks` : '/';
 
   return (
@@ -26,22 +30,21 @@ export default function SettingsPage() {
         </Link>
 
         <h1 className="mt-6 text-2xl font-semibold">Settings</h1>
+        {workspace ? <p className="mt-1 text-sm text-muted-foreground">{workspace.name}</p> : null}
 
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle className="text-base">Coming soon</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-muted-foreground">
-            <p>
-              Profile editing, theme picker, accent color picker, and Leave Workspace all live here
-              in the follow-up PR.
+        {workspace && user ? (
+          <div className="mt-8 space-y-6">
+            <WorkspaceMembersPanel
+              workspaceSlug={workspace.slug}
+              workspaceRole={myRole ?? 'MEMBER'}
+              currentUserId={user.id}
+            />
+            <p className="text-xs text-muted-foreground">
+              Profile editing, theme picker, and Leave Workspace ship in a follow-up. The theme +
+              accent color pickers already work from the sidebar user menu.
             </p>
-            <p>
-              Meanwhile the theme + accent color pickers already work from the sidebar user menu
-              (top-left avatar).
-            </p>
-          </CardContent>
-        </Card>
+          </div>
+        ) : null}
       </div>
     </main>
   );

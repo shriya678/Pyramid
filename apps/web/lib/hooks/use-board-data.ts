@@ -2,9 +2,24 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { listLabels } from '../api/labels';
-import { listWorkspaceMembers } from '../api/members';
+import {
+  addWorkspaceMember,
+  listWorkspaceMembers,
+  removeWorkspaceMember,
+  type AddWorkspaceMemberInput,
+} from '../api/members';
+import { addProjectMember, listProjectMembers, removeProjectMember } from '../api/project-members';
+import {
+  createProject,
+  deleteProject,
+  getProject,
+  listProjects,
+  updateProject,
+  type CreateProjectInput,
+  type UpdateProjectInput,
+} from '../api/projects';
 import { listStatuses, updateStatus, type UpdateStatusInput } from '../api/statuses';
-import type { StatusResponse, TaskResponse } from '../api/types';
+import type { ProjectResponse, StatusResponse, TaskResponse } from '../api/types';
 import {
   createTask,
   listTasks,
@@ -20,6 +35,10 @@ export const boardKeys = {
   labels: (slug: string) => ['labels', slug] as const,
   members: (slug: string) => ['members', slug] as const,
   tasks: (slug: string, query: TaskListQuery) => ['tasks', slug, query] as const,
+  projects: (slug: string) => ['projects', slug] as const,
+  project: (slug: string, projectId: string) => ['project', slug, projectId] as const,
+  projectMembers: (slug: string, projectId: string) =>
+    ['project-members', slug, projectId] as const,
 };
 
 /** Workspace statuses (columns for the board). Ordered ascending by Status.order. */
@@ -47,6 +66,18 @@ export function useWorkspaceMembers(slug: string) {
     queryFn: () => listWorkspaceMembers(slug),
     enabled: Boolean(slug),
   });
+}
+
+/**
+ * Look up the current user's role in the workspace. Falls back to
+ * `undefined` while the members list is still loading — callers that
+ * gate UI on OWNER/ADMIN should treat undefined as "not yet permitted"
+ * to avoid a flash of edit controls.
+ */
+export function useMyWorkspaceRole(slug: string, userId: string | undefined) {
+  const members = useWorkspaceMembers(slug);
+  if (!userId) return undefined;
+  return members.data?.find((m) => m.userId === userId)?.role;
 }
 
 /**
@@ -141,6 +172,126 @@ export function useUpdateStatus(slug: string) {
     onError: (_err, _vars, ctx) => {
       if (!ctx?.previous) return;
       qc.setQueryData(boardKeys.statuses(slug), ctx.previous);
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Projects
+// ---------------------------------------------------------------------------
+
+export function useProjects(slug: string) {
+  return useQuery({
+    queryKey: boardKeys.projects(slug),
+    queryFn: () => listProjects(slug),
+    enabled: Boolean(slug),
+  });
+}
+
+export function useProject(slug: string, projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: boardKeys.project(slug, projectId ?? ''),
+    queryFn: () => getProject(slug, projectId!),
+    enabled: Boolean(slug) && Boolean(projectId),
+  });
+}
+
+/** Create a project + invalidate the workspace-scoped projects list. */
+export function useCreateProject(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateProjectInput) => createProject(slug, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: boardKeys.projects(slug) });
+    },
+  });
+}
+
+/** Update a project — invalidates both the single-project cache and the list. */
+export function useUpdateProject(slug: string, projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateProjectInput) => updateProject(slug, projectId, input),
+    onSuccess: (updated) => {
+      qc.setQueryData<ProjectResponse>(boardKeys.project(slug, projectId), updated);
+      void qc.invalidateQueries({ queryKey: boardKeys.projects(slug) });
+    },
+  });
+}
+
+/** Delete a project. Also invalidates tasks (backend sets projectId=null on
+ *  the project's tasks — they survive as orphans, so the tasks cache is now
+ *  stale). */
+export function useDeleteProject(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (projectId: string) => deleteProject(slug, projectId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: boardKeys.projects(slug) });
+      void qc.invalidateQueries({ queryKey: ['tasks', slug] });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Project members
+// ---------------------------------------------------------------------------
+
+export function useProjectMembers(slug: string, projectId: string | null | undefined) {
+  return useQuery({
+    queryKey: boardKeys.projectMembers(slug, projectId ?? ''),
+    queryFn: () => listProjectMembers(slug, projectId!),
+    enabled: Boolean(slug) && Boolean(projectId),
+  });
+}
+
+/** Add a project member. Invalidates the project's members list AND the
+ *  workspace members list (a new COLLABORATOR may have been auto-created). */
+export function useAddProjectMember(slug: string, projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (email: string) => addProjectMember(slug, projectId, email),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: boardKeys.projectMembers(slug, projectId) });
+      void qc.invalidateQueries({ queryKey: boardKeys.members(slug) });
+    },
+  });
+}
+
+export function useRemoveProjectMember(slug: string, projectId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => removeProjectMember(slug, projectId, userId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: boardKeys.projectMembers(slug, projectId) });
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Workspace members (add / remove; the list hook already lives above as
+// useWorkspaceMembers).
+// ---------------------------------------------------------------------------
+
+export function useAddWorkspaceMember(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: AddWorkspaceMemberInput) => addWorkspaceMember(slug, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: boardKeys.members(slug) });
+    },
+  });
+}
+
+export function useRemoveWorkspaceMember(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (userId: string) => removeWorkspaceMember(slug, userId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: boardKeys.members(slug) });
+      // A removed member also lost their ProjectMember rows — invalidate any
+      // project-members caches for this workspace so the roster refreshes.
+      void qc.invalidateQueries({ queryKey: ['project-members', slug] });
     },
   });
 }
