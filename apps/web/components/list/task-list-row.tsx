@@ -38,7 +38,7 @@ export function TaskListRow({ workspaceSlug, task }: TaskListRowProps) {
 
   return (
     <Link
-      href={`/w/${workspaceSlug}/tasks/${task.id}`}
+      href={`/w/${workspaceSlug}/t/${task.id}`}
       className={cn(
         'grid grid-cols-[1fr_auto] items-center gap-3 rounded-md border px-3 py-2 shadow-sm transition-colors',
         'bg-card hover:bg-muted/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
