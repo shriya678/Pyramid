@@ -37,6 +37,16 @@ export async function listTasks(slug: string, query: TaskListQuery = {}): Promis
   return data;
 }
 
+export async function getTask(slug: string, taskId: string): Promise<TaskResponse> {
+  const { data } = await api.get<TaskResponse>(`/workspaces/${slug}/tasks/${taskId}`);
+  return data;
+}
+
+export async function deleteTask(slug: string, taskId: string): Promise<{ ok: true }> {
+  const { data } = await api.delete<{ ok: true }>(`/workspaces/${slug}/tasks/${taskId}`);
+  return data;
+}
+
 export async function createTask(slug: string, input: CreateTaskInput): Promise<TaskResponse> {
   const { data } = await api.post<TaskResponse>(`/workspaces/${slug}/tasks`, input);
   return data;

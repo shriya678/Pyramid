@@ -22,6 +22,8 @@ import { listStatuses, updateStatus, type UpdateStatusInput } from '../api/statu
 import type { ProjectResponse, StatusResponse, TaskResponse } from '../api/types';
 import {
   createTask,
+  deleteTask,
+  getTask,
   listTasks,
   updateTask,
   type CreateTaskInput,
@@ -35,6 +37,7 @@ export const boardKeys = {
   labels: (slug: string) => ['labels', slug] as const,
   members: (slug: string) => ['members', slug] as const,
   tasks: (slug: string, query: TaskListQuery) => ['tasks', slug, query] as const,
+  task: (slug: string, taskId: string) => ['task', slug, taskId] as const,
   projects: (slug: string) => ['projects', slug] as const,
   project: (slug: string, projectId: string) => ['project', slug, projectId] as const,
   projectMembers: (slug: string, projectId: string) =>
@@ -128,23 +131,54 @@ export function useUpdateTask(slug: string) {
     onMutate: async ({ taskId, input }) => {
       // Cancel in-flight refetches so they don't overwrite our optimistic diff.
       await qc.cancelQueries({ queryKey: ['tasks', slug] });
+      await qc.cancelQueries({ queryKey: boardKeys.task(slug, taskId) });
 
       // Snapshot every 'tasks' query slot (there's one per unique filter
       // combo the user has visited). We restore all of them on error.
       const snapshot = qc.getQueriesData<TaskResponse[]>({ queryKey: ['tasks', slug] });
+      const singleTask = qc.getQueryData<TaskResponse>(boardKeys.task(slug, taskId));
 
       qc.setQueriesData<TaskResponse[]>({ queryKey: ['tasks', slug] }, (old) => {
         if (!old) return old;
         return old.map((t) => (t.id === taskId ? { ...t, ...input } : t));
       });
+      qc.setQueryData<TaskResponse>(boardKeys.task(slug, taskId), (old) =>
+        old ? { ...old, ...input } : old,
+      );
 
-      return { snapshot };
+      return { snapshot, singleTask, taskId };
     },
     onError: (_err, _vars, ctx) => {
       if (!ctx) return;
       for (const [key, value] of ctx.snapshot) {
         qc.setQueryData(key, value);
       }
+      qc.setQueryData(boardKeys.task(slug, ctx.taskId), ctx.singleTask);
+    },
+    onSuccess: (updated) => {
+      // The server response has authoritative denormalised shape (with
+      // assignee names, label colours). Sync it into the single-task cache
+      // so the detail modal shows the enriched version.
+      qc.setQueryData<TaskResponse>(boardKeys.task(slug, updated.id), updated);
+    },
+  });
+}
+
+export function useTask(slug: string, taskId: string | null | undefined) {
+  return useQuery({
+    queryKey: boardKeys.task(slug, taskId ?? ''),
+    queryFn: () => getTask(slug, taskId!),
+    enabled: Boolean(slug) && Boolean(taskId),
+  });
+}
+
+export function useDeleteTask(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId: string) => deleteTask(slug, taskId),
+    onSuccess: (_r, taskId) => {
+      qc.removeQueries({ queryKey: boardKeys.task(slug, taskId) });
+      void qc.invalidateQueries({ queryKey: ['tasks', slug] });
     },
   });
 }

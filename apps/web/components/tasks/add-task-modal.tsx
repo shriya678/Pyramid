@@ -249,10 +249,12 @@ export function AddTaskModal({ workspaceSlug, defaultProjectId }: AddTaskModalPr
           </div>
 
           <ChipMultiSelect
-            label="Assignees"
+            label="Assignee"
             options={(members.data ?? []).map((m) => ({ id: m.userId, label: m.user.fullName }))}
             selected={assigneeIds}
-            onToggle={(id) => setAssigneeIds((prev) => toggle(prev, id))}
+            // Single-select: picking one deselects the other; clicking the
+            // current selection clears it.
+            onToggle={(id) => setAssigneeIds((prev) => (prev.has(id) ? new Set() : new Set([id])))}
             empty="No workspace members yet"
           />
           <ChipMultiSelect

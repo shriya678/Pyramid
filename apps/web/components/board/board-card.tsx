@@ -74,7 +74,7 @@ export function BoardCard({ workspaceSlug, task }: BoardCardProps) {
   return (
     <Link
       ref={sortable.setNodeRef}
-      href={`/w/${workspaceSlug}/tasks/${task.id}`}
+      href={`/w/${workspaceSlug}/t/${task.id}`}
       style={dragStyle}
       className={cn(
         'group block touch-none rounded-lg border bg-card p-3 text-left shadow-sm transition-shadow',
