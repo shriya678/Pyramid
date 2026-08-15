@@ -154,3 +154,31 @@ export interface ActivityResponse {
   payload: unknown;
   createdAt: string;
 }
+
+export type ResourceType = 'LINK' | 'FILE';
+
+export interface ResourceResponse {
+  id: string;
+  taskId: string;
+  type: ResourceType;
+  name: string;
+  url: string | null;
+  cloudinaryKey: string | null;
+  mimeType: string | null;
+  sizeBytes: number | null;
+  uploadedBy: CommentAuthorMini;
+  createdAt: string;
+}
+
+/** Params returned by POST /resources/sign-upload — used by the browser
+ *  to upload directly to Cloudinary before creating the Resource row. */
+export interface CloudinarySignedUpload {
+  cloudName: string;
+  apiKey: string;
+  timestamp: number;
+  signature: string;
+  folder: string;
+  uploadUrl: string;
+  resourceType: 'auto';
+  type: 'authenticated';
+}

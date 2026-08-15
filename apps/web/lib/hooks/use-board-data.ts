@@ -11,6 +11,14 @@ import {
 } from '../api/comments';
 import { listLabels } from '../api/labels';
 import {
+  createResource,
+  deleteResource,
+  getResourceUrl,
+  listResources,
+  signUpload,
+  type CreateResourceInput,
+} from '../api/resources';
+import {
   addWorkspaceMember,
   listWorkspaceMembers,
   removeWorkspaceMember,
@@ -52,6 +60,7 @@ export const boardKeys = {
     ['project-members', slug, projectId] as const,
   comments: (slug: string, taskId: string) => ['comments', slug, taskId] as const,
   activity: (slug: string, taskId: string) => ['activity', slug, taskId] as const,
+  resources: (slug: string, taskId: string) => ['resources', slug, taskId] as const,
 };
 
 /** Workspace statuses (columns for the board). Ordered ascending by Status.order. */
@@ -393,4 +402,95 @@ export function useActivity(slug: string, taskId: string | null | undefined) {
     queryFn: () => listActivity(slug, taskId!),
     enabled: Boolean(slug) && Boolean(taskId),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Resources — per-task link + Cloudinary file attachments
+// ---------------------------------------------------------------------------
+
+export function useResources(slug: string, taskId: string | null | undefined) {
+  return useQuery({
+    queryKey: boardKeys.resources(slug, taskId ?? ''),
+    queryFn: () => listResources(slug, taskId!),
+    enabled: Boolean(slug) && Boolean(taskId),
+  });
+}
+
+/**
+ * Create a Resource row (either a LINK or a FILE that was already
+ * uploaded to Cloudinary). Invalidates the resources cache AND the
+ * activity feed — backend writes a RESOURCE_ADDED activity in the
+ * same transaction.
+ */
+export function useCreateResource(slug: string, taskId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateResourceInput) => createResource(slug, taskId, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: boardKeys.resources(slug, taskId) });
+      void qc.invalidateQueries({ queryKey: boardKeys.activity(slug, taskId) });
+    },
+  });
+}
+
+export function useDeleteResource(slug: string, taskId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (resourceId: string) => deleteResource(slug, taskId, resourceId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: boardKeys.resources(slug, taskId) });
+    },
+  });
+}
+
+/**
+ * Two-step file upload:
+ *   1. `signUpload(slug, taskId)` — backend returns signed Cloudinary
+ *      params scoped to this task.
+ *   2. Browser POSTs the file bytes directly to Cloudinary (never
+ *      through our API).
+ *   3. On Cloudinary success, `createResource` writes the FILE row
+ *      with the returned `public_id` as `cloudinaryKey`.
+ *
+ * This hook returns a function that runs all three steps and yields
+ * the created ResourceResponse. Errors from any step propagate.
+ */
+export function useUploadTaskFile(slug: string, taskId: string) {
+  const create = useCreateResource(slug, taskId);
+  return useMutation({
+    mutationFn: async (file: File) => {
+      const signed = await signUpload(slug, taskId);
+      const form = new FormData();
+      form.append('file', file);
+      form.append('api_key', signed.apiKey);
+      form.append('timestamp', String(signed.timestamp));
+      form.append('signature', signed.signature);
+      form.append('folder', signed.folder);
+      form.append('type', signed.type);
+      const cloudRes = await fetch(signed.uploadUrl, { method: 'POST', body: form });
+      if (!cloudRes.ok) {
+        throw new Error(`Cloudinary upload failed: HTTP ${cloudRes.status}`);
+      }
+      const uploaded = (await cloudRes.json()) as {
+        public_id: string;
+        bytes: number;
+        format: string;
+        resource_type: string;
+      };
+      return create.mutateAsync({
+        type: 'FILE',
+        name: file.name,
+        cloudinaryKey: uploaded.public_id,
+        mimeType: file.type || `${uploaded.resource_type}/${uploaded.format}`,
+        sizeBytes: uploaded.bytes,
+      });
+    },
+  });
+}
+
+/** On-demand fetcher — call when the user clicks a file link and we
+ *  need a fresh short-lived signed read URL. Not a query because the
+ *  URL expires and shouldn't be cached. */
+export function useResourceUrlFetcher(slug: string, taskId: string) {
+  return (resourceId: string) => getResourceUrl(slug, taskId, resourceId);
 }
