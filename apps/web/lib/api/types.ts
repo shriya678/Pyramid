@@ -109,3 +109,48 @@ export interface ProjectMemberResponse {
 export type AddProjectMemberResult =
   | { alreadyHasAccess: true; workspaceRole: Role; user: ProjectMemberResponse['user'] }
   | { alreadyHasAccess: false; member: ProjectMemberResponse; implicitWorkspaceAdd: boolean };
+
+export interface CommentAuthorMini {
+  id: string;
+  username: string;
+  fullName: string;
+  avatarUrl: string | null;
+}
+
+export interface CommentResponse {
+  id: string;
+  taskId: string;
+  body: string;
+  author: CommentAuthorMini;
+  parentCommentId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Top-level comment with its (one level of) replies nested for rendering. */
+export interface ThreadedCommentResponse extends CommentResponse {
+  replies: CommentResponse[];
+}
+
+export type ActivityType =
+  | 'TASK_CREATED'
+  | 'TASK_UPDATED'
+  | 'STATUS_CHANGED'
+  | 'PRIORITY_CHANGED'
+  | 'DUE_DATE_CHANGED'
+  | 'MEMBER_ADDED'
+  | 'MEMBER_REMOVED'
+  | 'LABEL_ADDED'
+  | 'LABEL_REMOVED'
+  | 'COMMENT_ADDED'
+  | 'RESOURCE_ADDED'
+  | 'USER_UPDATE';
+
+export interface ActivityResponse {
+  id: string;
+  taskId: string;
+  actor: CommentAuthorMini;
+  type: ActivityType;
+  payload: unknown;
+  createdAt: string;
+}

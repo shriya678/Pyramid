@@ -1,6 +1,14 @@
 'use client';
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { listActivity } from '../api/activity';
+import {
+  createComment,
+  deleteComment,
+  listComments,
+  updateComment,
+  type CreateCommentInput,
+} from '../api/comments';
 import { listLabels } from '../api/labels';
 import {
   addWorkspaceMember,
@@ -42,6 +50,8 @@ export const boardKeys = {
   project: (slug: string, projectId: string) => ['project', slug, projectId] as const,
   projectMembers: (slug: string, projectId: string) =>
     ['project-members', slug, projectId] as const,
+  comments: (slug: string, taskId: string) => ['comments', slug, taskId] as const,
+  activity: (slug: string, taskId: string) => ['activity', slug, taskId] as const,
 };
 
 /** Workspace statuses (columns for the board). Ordered ascending by Status.order. */
@@ -327,5 +337,60 @@ export function useRemoveWorkspaceMember(slug: string) {
       // project-members caches for this workspace so the roster refreshes.
       void qc.invalidateQueries({ queryKey: ['project-members', slug] });
     },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Comments + activity (per-task, keyed by taskId)
+// ---------------------------------------------------------------------------
+
+export function useComments(slug: string, taskId: string | null | undefined) {
+  return useQuery({
+    queryKey: boardKeys.comments(slug, taskId ?? ''),
+    queryFn: () => listComments(slug, taskId!),
+    enabled: Boolean(slug) && Boolean(taskId),
+  });
+}
+
+/** Post a new comment or reply. On success invalidates both the comments
+ *  and activity caches (a COMMENT_ADDED activity row is written server-side
+ *  in the same transaction). */
+export function useCreateComment(slug: string, taskId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateCommentInput) => createComment(slug, taskId, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: boardKeys.comments(slug, taskId) });
+      void qc.invalidateQueries({ queryKey: boardKeys.activity(slug, taskId) });
+    },
+  });
+}
+
+export function useUpdateComment(slug: string, taskId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ commentId, body }: { commentId: string; body: string }) =>
+      updateComment(slug, taskId, commentId, body),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: boardKeys.comments(slug, taskId) });
+    },
+  });
+}
+
+export function useDeleteComment(slug: string, taskId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (commentId: string) => deleteComment(slug, taskId, commentId),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: boardKeys.comments(slug, taskId) });
+    },
+  });
+}
+
+export function useActivity(slug: string, taskId: string | null | undefined) {
+  return useQuery({
+    queryKey: boardKeys.activity(slug, taskId ?? ''),
+    queryFn: () => listActivity(slug, taskId!),
+    enabled: Boolean(slug) && Boolean(taskId),
   });
 }
