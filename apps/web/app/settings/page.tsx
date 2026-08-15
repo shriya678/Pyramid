@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { StatusesPanel } from '@/components/settings/statuses-panel';
 import { WorkspaceMembersPanel } from '@/components/settings/workspace-members-panel';
 import { useMyWorkspaceRole } from '@/lib/hooks/use-board-data';
 import { useAuthStore } from '@/lib/stores/auth-store';
@@ -39,9 +40,10 @@ export default function SettingsPage() {
               workspaceRole={myRole ?? 'MEMBER'}
               currentUserId={user.id}
             />
+            <StatusesPanel workspaceSlug={workspace.slug} workspaceRole={myRole ?? 'MEMBER'} />
             <p className="text-xs text-muted-foreground">
-              Profile editing, theme picker, and Leave Workspace ship in a follow-up. The theme +
-              accent color pickers already work from the sidebar user menu.
+              Profile editing and Leave Workspace ship in a follow-up. The theme + accent color
+              pickers already work from the sidebar user menu.
             </p>
           </div>
         ) : null}

@@ -34,7 +34,14 @@ import {
   type CreateProjectInput,
   type UpdateProjectInput,
 } from '../api/projects';
-import { listStatuses, updateStatus, type UpdateStatusInput } from '../api/statuses';
+import {
+  createStatus,
+  deleteStatus,
+  listStatuses,
+  updateStatus,
+  type CreateStatusInput,
+  type UpdateStatusInput,
+} from '../api/statuses';
 import type { ProjectResponse, StatusResponse, TaskResponse } from '../api/types';
 import {
   createTask,
@@ -225,6 +232,33 @@ export function useUpdateStatus(slug: string) {
     onError: (_err, _vars, ctx) => {
       if (!ctx?.previous) return;
       qc.setQueryData(boardKeys.statuses(slug), ctx.previous);
+    },
+  });
+}
+
+export function useCreateStatus(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateStatusInput) => createStatus(slug, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: boardKeys.statuses(slug) });
+    },
+  });
+}
+
+/**
+ * Delete a status. When tasks are attached the caller must pass `moveTo`
+ * so the backend can reassign them; the mutation invalidates both the
+ * statuses cache AND every tasks list (rows moved statuses under us).
+ */
+export function useDeleteStatus(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ statusId, moveTo }: { statusId: string; moveTo?: string }) =>
+      deleteStatus(slug, statusId, moveTo),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: boardKeys.statuses(slug) });
+      void qc.invalidateQueries({ queryKey: ['tasks', slug] });
     },
   });
 }
