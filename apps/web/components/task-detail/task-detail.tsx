@@ -4,6 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import { CalendarDays, Maximize2, Trash2 } from 'lucide-react';
 import { ActivityFeed } from './activity-feed';
 import { CommentsPanel } from './comments-panel';
+import { ResourcesPanel } from './resources-panel';
+import { SubtasksPanel } from './subtasks-panel';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -239,13 +241,16 @@ function TaskDetailBody({
             />
           </div>
 
-          <SectionPlaceholder
-            title="Subtasks"
-            body="Subtasks land in a follow-up. Backend already supports them via parentTaskId."
+          <SubtasksPanel
+            workspaceSlug={workspaceSlug}
+            parentTaskId={task.id}
+            parentProjectId={task.projectId}
           />
-          <SectionPlaceholder
-            title="Resources"
-            body="Link + Cloudinary file upload ship in the next task-detail PR."
+          <ResourcesPanel
+            workspaceSlug={workspaceSlug}
+            taskId={task.id}
+            currentUserId={currentUserId}
+            workspaceRole={workspaceRole}
           />
           <CommentsPanel
             workspaceSlug={workspaceSlug}
@@ -390,15 +395,6 @@ function FieldRow({ label, children }: { label: string; children: React.ReactNod
     <div className="space-y-1">
       <Label className="text-[11px] uppercase tracking-wide text-muted-foreground">{label}</Label>
       {children}
-    </div>
-  );
-}
-
-function SectionPlaceholder({ title, body }: { title: string; body: string }) {
-  return (
-    <div className="rounded-md border border-dashed p-3">
-      <p className="text-xs font-medium">{title}</p>
-      <p className="mt-1 text-[11px] text-muted-foreground">{body}</p>
     </div>
   );
 }
