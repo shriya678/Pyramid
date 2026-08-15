@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { CalendarDays, Maximize2, Trash2 } from 'lucide-react';
+import { ActivityFeed } from './activity-feed';
+import { CommentsPanel } from './comments-panel';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,12 +20,14 @@ import type { Priority, TaskResponse } from '@/lib/api/types';
 import {
   useDeleteTask,
   useLabels,
+  useMyWorkspaceRole,
   useStatuses,
   useTask,
   useUpdateTask,
   useWorkspaceMembers,
 } from '@/lib/hooks/use-board-data';
 import { useAutosaveField } from '@/lib/hooks/use-autosave-field';
+import { useAuthStore } from '@/lib/stores/auth-store';
 
 const PRIORITIES: Priority[] = ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT'];
 const PRIORITY_LABEL: Record<Priority, string> = {
@@ -97,6 +101,10 @@ function TaskDetailBody({
   onDeleted?: () => void;
   onExpandToFullPage?: () => void;
 }) {
+  const currentUserId = useAuthStore((s) => s.user?.id);
+  // Fall back to MEMBER while the members list is loading so moderator
+  // affordances don't briefly appear for users who don't have them.
+  const workspaceRole = useMyWorkspaceRole(workspaceSlug, currentUserId) ?? 'MEMBER';
   const update = useUpdateTask(workspaceSlug);
   const remove = useDeleteTask(workspaceSlug);
   const statuses = useStatuses(workspaceSlug);
@@ -239,10 +247,12 @@ function TaskDetailBody({
             title="Resources"
             body="Link + Cloudinary file upload ship in the next task-detail PR."
           />
-          <SectionPlaceholder
-            title="Comments"
-            body="Threaded comments + activity feed ship in the next task-detail PR."
+          <CommentsPanel
+            workspaceSlug={workspaceSlug}
+            taskId={task.id}
+            workspaceRole={workspaceRole}
           />
+          <ActivityFeed workspaceSlug={workspaceSlug} taskId={task.id} />
         </div>
 
         {/* Right — details panel */}
