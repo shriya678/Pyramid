@@ -23,3 +23,36 @@ export async function updateStatus(
   );
   return data;
 }
+
+export interface CreateStatusInput {
+  name: string;
+  color: string;
+  order?: number;
+}
+
+export async function createStatus(
+  slug: string,
+  input: CreateStatusInput,
+): Promise<StatusResponse> {
+  const { data } = await api.post<StatusResponse>(`/workspaces/${slug}/statuses`, input);
+  return data;
+}
+
+/**
+ * Delete a status. Backend rules:
+ *   - Returns 409 if it's the last status in the workspace.
+ *   - Requires ?moveTo=<statusId> when tasks are attached; moved count
+ *     comes back as `movedTasks`.
+ *   - Otherwise the status is removed with movedTasks: 0.
+ */
+export async function deleteStatus(
+  slug: string,
+  statusId: string,
+  moveTo?: string,
+): Promise<{ ok: true; movedTasks: number }> {
+  const { data } = await api.delete<{ ok: true; movedTasks: number }>(
+    `/workspaces/${slug}/statuses/${statusId}`,
+    { params: moveTo ? { moveTo } : undefined },
+  );
+  return data;
+}
