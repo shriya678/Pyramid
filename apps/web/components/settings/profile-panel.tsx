@@ -1,12 +1,12 @@
 'use client';
 
 import { useState, type FormEvent } from 'react';
-import { AxiosError } from 'axios';
 import { Pencil } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { extractErrorMessage } from '@/lib/api/error-message';
 import { useUpdateMe } from '@/lib/hooks/use-workspaces';
 import { useAuthStore, type AuthUser } from '@/lib/stores/auth-store';
 
@@ -69,17 +69,7 @@ export function ProfilePanel() {
         setEditing(false);
       },
       onError: (err) => {
-        const message =
-          err instanceof AxiosError
-            ? // Backend 400s (class-validator) return an array; a single
-              // string reads better inline.
-              ((Array.isArray(err.response?.data?.message)
-                ? err.response.data.message[0]
-                : err.response?.data?.message) ?? err.message)
-            : err instanceof Error
-              ? err.message
-              : 'Failed to update profile';
-        setError(String(message));
+        setError(extractErrorMessage(err, 'Failed to update profile'));
       },
     });
   };

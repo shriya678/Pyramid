@@ -13,6 +13,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { extractErrorMessage } from '@/lib/api/error-message';
 import type { Role, WorkspaceMemberResponse } from '@/lib/api/types';
 import {
   useAddWorkspaceMember,
@@ -75,7 +76,7 @@ export function WorkspaceMembersPanel({
           setNotice(`${added.user.fullName} added as ${ROLE_LABEL[added.role]} of the workspace.`);
         },
         onError: (err) => {
-          setError(err instanceof Error ? err.message : 'Failed to add member');
+          setError(extractErrorMessage(err, 'Failed to add member'));
         },
       },
     );

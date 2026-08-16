@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCreateProject, useWorkspaceMembers } from '@/lib/hooks/use-board-data';
+import { extractErrorMessage } from '@/lib/api/error-message';
 import type { Priority } from '@/lib/api/types';
 
 const PRIORITIES: Priority[] = ['NONE', 'LOW', 'MEDIUM', 'HIGH', 'URGENT'];
@@ -84,7 +85,7 @@ export function AddProjectModal({ workspaceSlug }: AddProjectModalProps) {
           setOpen(false);
         },
         onError: (err) => {
-          setError(err instanceof Error ? err.message : 'Failed to create project');
+          setError(extractErrorMessage(err, 'Failed to create project'));
         },
       },
     );

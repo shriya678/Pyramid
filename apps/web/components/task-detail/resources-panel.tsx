@@ -5,6 +5,7 @@ import { ExternalLink, File as FileIcon, Link as LinkIcon, Paperclip, Trash2 } f
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { extractErrorMessage } from '@/lib/api/error-message';
 import type { ResourceResponse } from '@/lib/api/types';
 import {
   useCreateResource,
@@ -71,7 +72,7 @@ export function ResourcesPanel({
           setLinkUrl('');
           setLinkName('');
         },
-        onError: (err) => setError(err instanceof Error ? err.message : 'Failed to add link'),
+        onError: (err) => setError(extractErrorMessage(err, 'Failed to add link')),
       },
     );
   };
@@ -82,7 +83,7 @@ export function ResourcesPanel({
     if (!file) return;
     setError(null);
     upload.mutate(file, {
-      onError: (err) => setError(err instanceof Error ? err.message : 'Upload failed'),
+      onError: (err) => setError(extractErrorMessage(err, 'Upload failed')),
     });
   };
 
@@ -92,7 +93,7 @@ export function ResourcesPanel({
       const { url } = await fetchFileUrl(resource.id);
       window.open(url, '_blank', 'noopener,noreferrer');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to fetch file URL');
+      setError(extractErrorMessage(err, 'Failed to fetch file URL'));
     }
   };
 
