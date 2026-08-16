@@ -1,7 +1,8 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AuthResponse, RefreshResponse } from './dto/auth-response.dto';
+import type { UpdateMeDto } from './dto/update-me.dto';
 import type { GoogleProfileClaims } from './strategies/google.strategy';
 import type { AuthenticatedUser } from './strategies/jwt.strategy';
 import { TokensService } from './tokens.service';
@@ -140,6 +141,35 @@ export class AuthService {
 
   refresh(rawRefresh: string): Promise<RefreshResponse> {
     return this.tokens.rotate(rawRefresh);
+  }
+
+  /**
+   * Update the current user's profile fields. Only the fields the caller sent
+   * are touched; username uniqueness is DB-enforced and surfaced as a friendly
+   * 409 if a clash is detected.
+   */
+  async updateProfile(userId: string, dto: UpdateMeDto): Promise<AuthResponse['user']> {
+    if (dto.username) {
+      const clash = await this.prisma.user.findFirst({
+        where: { username: dto.username, id: { not: userId } },
+        select: { id: true },
+      });
+      if (clash) throw new ConflictException('Username is taken');
+    }
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        // Explicit spread: undefined values are dropped by Prisma, so PATCH
+        // semantics (omit → don't touch) are preserved. `null` is legal for
+        // title/avatarUrl so the user can clear them.
+        ...(dto.fullName !== undefined ? { fullName: dto.fullName } : {}),
+        ...(dto.username !== undefined ? { username: dto.username } : {}),
+        ...(dto.title !== undefined ? { title: dto.title } : {}),
+        ...(dto.avatarUrl !== undefined ? { avatarUrl: dto.avatarUrl } : {}),
+      },
+      select: this.userSelect,
+    });
+    return updated;
   }
 
   private readonly userSelect = {
