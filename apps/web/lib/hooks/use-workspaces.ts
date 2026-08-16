@@ -3,6 +3,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   createWorkspace,
+  deleteWorkspace,
   leaveWorkspace,
   listWorkspaces,
   type CreateWorkspaceInput,
@@ -55,6 +56,26 @@ export function useLeaveWorkspace() {
     mutationFn: (slug: string) => leaveWorkspace(slug),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: workspacesKey });
+    },
+  });
+}
+
+/**
+ * Permanently delete a workspace. Also nukes every cache entry that
+ * referenced it — otherwise stale board/task queries would linger and
+ * surface phantom 404s if the router hasn't moved on yet.
+ */
+export function useDeleteWorkspace() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (slug: string) => deleteWorkspace(slug),
+    onSuccess: (_res, slug) => {
+      void qc.invalidateQueries({ queryKey: workspacesKey });
+      // Drop every cached entry keyed by this slug — statuses, tasks,
+      // labels, members, projects. Cheaper than listing them all.
+      qc.removeQueries({
+        predicate: (q) => q.queryKey.includes(slug),
+      });
     },
   });
 }

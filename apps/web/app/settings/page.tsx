@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { DeleteWorkspacePanel } from '@/components/settings/delete-workspace-panel';
 import { LeaveWorkspacePanel } from '@/components/settings/leave-workspace-panel';
 import { ProfilePanel } from '@/components/settings/profile-panel';
 import { StatusesPanel } from '@/components/settings/statuses-panel';
@@ -12,8 +13,9 @@ import { useAuthStore } from '@/lib/stores/auth-store';
 /**
  * Settings screen. Route sits outside the workspace shell because Figma
  * p13 gives Settings its own chrome. Sections top-to-bottom: Profile,
- * Workspace Members, Statuses, Leave Workspace (destructive, at the
- * bottom so it doesn't compete with routine settings).
+ * Workspace Members, Statuses, then the two destructive sections at the
+ * bottom — Leave (any member) and Delete (owner only). Destructive at
+ * the end so it doesn't compete with routine settings.
  *
  * Theme + accent color pickers already live in the sidebar user menu.
  */
@@ -47,6 +49,11 @@ export default function SettingsPage() {
             />
             <StatusesPanel workspaceSlug={workspace.slug} workspaceRole={myRole ?? 'MEMBER'} />
             <LeaveWorkspacePanel
+              workspaceSlug={workspace.slug}
+              workspaceName={workspace.name}
+              workspaceRole={myRole ?? 'MEMBER'}
+            />
+            <DeleteWorkspacePanel
               workspaceSlug={workspace.slug}
               workspaceName={workspace.name}
               workspaceRole={myRole ?? 'MEMBER'}
