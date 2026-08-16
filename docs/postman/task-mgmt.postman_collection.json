@@ -773,6 +773,101 @@
               }
             }
           ]
+        },
+        {
+          "name": "DELETE /workspaces/does-not-exist → 404",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/does-not-exist-nope-nope",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "does-not-exist-nope-nope"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('404 Not Found', () => pm.response.to.have.status(404));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "DELETE /workspaces/:secondary (OWNER — nuke the secondary)",
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{secondaryWorkspaceSlug}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{secondaryWorkspaceSlug}}"]
+            },
+            "description": "OWNER-only delete. Cascades every workspace-scoped row (members, statuses, projects, tasks, labels + all subordinates) via Prisma onDelete: Cascade. Irreversible. We delete the secondary workspace created earlier so the primary stays around for the rest of the collection."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('returns ok', () => pm.expect(pm.response.json().ok).to.eql(true));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /workspaces/:deleted-secondary → 404 (proves cascade)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{secondaryWorkspaceSlug}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{secondaryWorkspaceSlug}}"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('404 Not Found', () => pm.response.to.have.status(404));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /workspaces (back to just the primary)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('only the primary remains', () => {",
+                  "  pm.expect(body).to.have.lengthOf(1);",
+                  "  pm.expect(body[0].slug).to.eql(pm.collectionVariables.get('workspaceSlug'));",
+                  "});"
+                ]
+              }
+            }
+          ]
         }
       ]
     },

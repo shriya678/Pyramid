@@ -37,3 +37,13 @@ export async function leaveWorkspace(slug: string): Promise<{ ok: true }> {
   const { data } = await api.post<{ ok: true }>(`/workspaces/${slug}/leave`);
   return data;
 }
+
+/**
+ * Permanently delete a workspace and all its data. OWNER only. Backend
+ * cascades through every workspace-scoped row via Prisma's `onDelete: Cascade`.
+ * Irreversible.
+ */
+export async function deleteWorkspace(slug: string): Promise<{ ok: true }> {
+  const { data } = await api.delete<{ ok: true }>(`/workspaces/${slug}`);
+  return data;
+}
