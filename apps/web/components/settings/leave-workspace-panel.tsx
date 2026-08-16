@@ -2,7 +2,6 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { AxiosError } from 'axios';
 import { LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { extractErrorMessage } from '@/lib/api/error-message';
 import { useLeaveWorkspace, useWorkspaces } from '@/lib/hooks/use-workspaces';
 import { useWorkspaceMembers } from '@/lib/hooks/use-board-data';
 import { useAuthStore } from '@/lib/stores/auth-store';
@@ -77,15 +77,7 @@ export function LeaveWorkspacePanel({
         }
       },
       onError: (err) => {
-        const message =
-          err instanceof AxiosError
-            ? ((Array.isArray(err.response?.data?.message)
-                ? err.response.data.message[0]
-                : err.response?.data?.message) ?? err.message)
-            : err instanceof Error
-              ? err.message
-              : 'Failed to leave workspace';
-        setError(String(message));
+        setError(extractErrorMessage(err, 'Failed to leave workspace'));
       },
     });
   };

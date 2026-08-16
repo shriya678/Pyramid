@@ -21,6 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { extractErrorMessage } from '@/lib/api/error-message';
 import {
   useCreateTask,
   useLabels,
@@ -128,7 +129,7 @@ export function AddTaskModal({ workspaceSlug, defaultProjectId }: AddTaskModalPr
           setOpen(false);
         },
         onError: (err) => {
-          setError(err instanceof Error ? err.message : 'Failed to create task');
+          setError(extractErrorMessage(err, 'Failed to create task'));
         },
       },
     );

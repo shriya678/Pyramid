@@ -2,7 +2,6 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { AxiosError } from 'axios';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,6 +12,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { extractErrorMessage } from '@/lib/api/error-message';
 import { useCreateWorkspace } from '@/lib/hooks/use-workspaces';
 import { useAuthStore } from '@/lib/stores/auth-store';
 
@@ -61,17 +61,7 @@ export function CreateWorkspaceModal({ open, onOpenChange }: CreateWorkspaceModa
           router.push(`/w/${ws.slug}/tasks`);
         },
         onError: (err) => {
-          const message =
-            err instanceof AxiosError
-              ? // Backend 400s expose the class-validator message array; a
-                // single string is easier to read for the user.
-                ((Array.isArray(err.response?.data?.message)
-                  ? err.response.data.message[0]
-                  : err.response?.data?.message) ?? err.message)
-              : err instanceof Error
-                ? err.message
-                : 'Failed to create workspace';
-          setError(String(message));
+          setError(extractErrorMessage(err, 'Failed to create workspace'));
         },
       },
     );

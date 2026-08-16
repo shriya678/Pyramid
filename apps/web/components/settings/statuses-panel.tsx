@@ -20,6 +20,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { extractErrorMessage } from '@/lib/api/error-message';
 import type { Role, StatusResponse } from '@/lib/api/types';
 import { fractionalIndexAt } from '@/lib/board/fractional-index';
 import {
@@ -91,8 +92,7 @@ export function StatusesPanel({ workspaceSlug, workspaceRole }: StatusesPanelPro
           setNewColor(PALETTE[1]);
           setShowAdd(false);
         },
-        onError: (err) =>
-          setAddError(err instanceof Error ? err.message : 'Failed to create status'),
+        onError: (err) => setAddError(extractErrorMessage(err, 'Failed to create status')),
       },
     );
   };
