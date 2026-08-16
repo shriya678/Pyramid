@@ -20,6 +20,7 @@
     { "key": "refreshToken", "value": "", "type": "string" },
     { "key": "oldRefreshToken", "value": "", "type": "string" },
     { "key": "workspaceSlug", "value": "", "type": "string" },
+    { "key": "secondaryWorkspaceSlug", "value": "", "type": "string" },
     { "key": "createdStatusId", "value": "", "type": "string" },
     { "key": "defaultStatusId", "value": "", "type": "string" },
     { "key": "createdLabelId", "value": "", "type": "string" },
@@ -152,6 +153,129 @@
                   "});",
                   "// Capture the user's id so later tests can use it as a workspace-member leadUserId.",
                   "pm.collectionVariables.set('currentUserId', body.id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /auth/me (update fullName + title)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Renamed via Postman\",\n  \"title\": \"Staff Engineer\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('fullName + title updated', () => {",
+                  "  pm.expect(body.fullName).to.eql('Renamed via Postman');",
+                  "  pm.expect(body.title).to.eql('Staff Engineer');",
+                  "});",
+                  "pm.test('sensitive fields not returned', () => {",
+                  "  pm.expect(body).to.not.have.property('passwordHash');",
+                  "  pm.expect(body).to.not.have.property('googleId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /auth/me (clear title with null)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": null\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Proves null-clearing works for nullable fields (title/avatarUrl). Omit → don't touch; null → clear."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('title cleared', () => pm.expect(pm.response.json().title).to.eql(null));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /auth/me invalid username → 400 (regex)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"BAD CAPS\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Username DTO enforces lowercase kebab-ish via @Matches — capital letters and spaces are rejected."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "PATCH /auth/me with extra field → 400 (mass assignment)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"fullName\": \"Legit\",\n  \"isGuest\": false,\n  \"email\": \"hijack@evil.com\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Proves forbidNonWhitelisted:true blocks bypass of the DTO — email / isGuest / passwordHash / googleId must never be settable via this endpoint."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('rejects the extra property', () => {",
+                  "  const message = JSON.stringify(pm.response.json());",
+                  "  pm.expect(message).to.match(/should not exist|property.*email|property.*isGuest/i);",
+                  "});"
                 ]
               }
             }
@@ -429,6 +553,223 @@
                   "  pm.expect(message).to.match(/should not exist|property.*slug|property.*ownerId/i);",
                   "});"
                 ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workspaces (create secondary — no demo seed)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Postman Secondary\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces"]
+            },
+            "description": "User-invoked workspace creation. Caller becomes OWNER; workspace gets default statuses only (no seeded teammates / demo project — that's reserved for first-login provisioning)."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201 Created', () => pm.response.to.have.status(201));",
+                  "const body = pm.response.json();",
+                  "pm.test('caller is OWNER', () => pm.expect(body.role).to.eql('OWNER'));",
+                  "pm.test('slug derived from name', () => pm.expect(body.slug).to.match(/^postman-secondary/));",
+                  "pm.collectionVariables.set('secondaryWorkspaceSlug', body.slug);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workspaces empty name → 400 (validation)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/workspaces",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('400 Bad Request', () => pm.response.to.have.status(400));"]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET secondary workspace: statuses = 4 defaults only",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{secondaryWorkspaceSlug}}/statuses",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{secondaryWorkspaceSlug}}", "statuses"]
+            },
+            "description": "Confirms the secondary workspace got the 4 default statuses but no demo seed. Combined with the members + projects checks below, proves provisionCore() runs cleanly without pulling in fixtures."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('exactly 4 default statuses', () => pm.expect(body).to.have.lengthOf(4));",
+                  "const names = body.map((s) => s.name).sort();",
+                  "pm.test('names match defaults', () => pm.expect(names).to.eql(['Completed', 'Doing', 'On Hold', 'To Do']));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET secondary workspace: members = just me",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{secondaryWorkspaceSlug}}/members",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{secondaryWorkspaceSlug}}", "members"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('only the owner is a member', () => {",
+                  "  pm.expect(body).to.have.lengthOf(1);",
+                  "  pm.expect(body[0].role).to.eql('OWNER');",
+                  "  pm.expect(body[0].userId).to.eql(pm.collectionVariables.get('currentUserId'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET secondary workspace: projects = empty",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{secondaryWorkspaceSlug}}/projects",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{secondaryWorkspaceSlug}}", "projects"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "pm.test('no demo project seeded', () => pm.expect(pm.response.json()).to.have.lengthOf(0));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "GET /workspaces (now shows both)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces"]
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const body = pm.response.json();",
+                  "pm.test('now 2 workspaces', () => pm.expect(body).to.have.lengthOf(2));",
+                  "const slugs = body.map((w) => w.slug).sort();",
+                  "pm.test('includes both workspaces', () => {",
+                  "  pm.expect(slugs).to.include(pm.collectionVariables.get('workspaceSlug'));",
+                  "  pm.expect(slugs).to.include(pm.collectionVariables.get('secondaryWorkspaceSlug'));",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workspaces/:slug/leave sole OWNER → 400",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{secondaryWorkspaceSlug}}/leave",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "{{secondaryWorkspaceSlug}}", "leave"]
+            },
+            "description": "Both this user's workspaces have only one OWNER (themselves), so leave is always blocked here. The happy-path leave requires a second real user; covered in unit tests and by the multi-user manual demo path in docs/PLAN.md."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 Bad Request', () => pm.response.to.have.status(400));",
+                  "pm.test('mentions sole owner', () => {",
+                  "  pm.expect(pm.response.json().message).to.match(/sole owner|delete the workspace/i);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "POST /workspaces/:slug/leave for non-member → 404",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/does-not-exist-nope-nope/leave",
+              "host": ["{{baseUrl}}"],
+              "path": ["workspaces", "does-not-exist-nope-nope", "leave"]
+            },
+            "description": "Same 404-not-403 posture as the rest of the workspace routes: we don't leak existence."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": ["pm.test('404 Not Found', () => pm.response.to.have.status(404));"]
               }
             }
           ]
