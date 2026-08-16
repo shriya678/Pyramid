@@ -1,13 +1,16 @@
 'use client';
 
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Check, ChevronsUpDown, LogOut, Palette, Settings, Sun } from 'lucide-react';
+import { Check, ChevronsUpDown, LogOut, Palette, Plus, Settings, Sun } from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
@@ -16,11 +19,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth-store';
+import { useWorkspaces } from '@/lib/hooks/use-workspaces';
 import {
   ACCENT_COLORS,
   usePreferencesStore,
   type AccentColor,
 } from '@/lib/stores/preferences-store';
+import { CreateWorkspaceModal } from './create-workspace-modal';
 
 interface WorkspaceMenuProps {
   collapsed: boolean;
@@ -46,6 +51,8 @@ export function WorkspaceMenu({ collapsed }: WorkspaceMenuProps) {
   const user = useAuthStore((s) => s.user);
   const workspace = useAuthStore((s) => s.workspace);
   const clearAuth = useAuthStore((s) => s.clear);
+  const workspaces = useWorkspaces();
+  const [createOpen, setCreateOpen] = useState(false);
 
   if (!workspace) return null;
 
@@ -59,92 +66,142 @@ export function WorkspaceMenu({ collapsed }: WorkspaceMenuProps) {
     router.push('/settings');
   };
 
+  const switchTo = (slug: string, id: string, name: string) => {
+    if (slug === workspace.slug) return;
+    // Update the store first so AuthGuard sees a matching slug on nav and
+    // doesn't briefly render the "Switching workspace…" fallback.
+    useAuthStore.setState({ workspace: { id, slug, name } });
+    router.push(`/w/${slug}/tasks`);
+  };
+
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        className={cn(
-          'flex flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-sidebar-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
-          collapsed && 'justify-center px-0',
-        )}
-        aria-label="Open workspace menu"
-      >
-        <Avatar className="h-7 w-7 shrink-0">
-          {user?.avatarUrl ? <AvatarImage src={user.avatarUrl} alt={user.fullName} /> : null}
-          <AvatarFallback className="text-[10px]">{initials(workspace.name)}</AvatarFallback>
-        </Avatar>
-        {!collapsed && (
-          <>
-            <span className="truncate text-sm font-medium">{workspace.name}</span>
-            <ChevronsUpDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
-          </>
-        )}
-      </DropdownMenuTrigger>
-
-      <DropdownMenuContent align="start" className="w-64">
-        {/* Profile summary */}
-        {user ? (
-          <>
-            <div className="flex items-center gap-2 p-2">
-              <Avatar className="h-9 w-9">
-                {user.avatarUrl ? <AvatarImage src={user.avatarUrl} alt={user.fullName} /> : null}
-                <AvatarFallback>{initials(user.fullName)}</AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{user.fullName}</p>
-                <p className="truncate text-xs text-muted-foreground">{user.email}</p>
-              </div>
-            </div>
-            <DropdownMenuSeparator />
-          </>
-        ) : null}
-
-        {/* Change Theme submenu */}
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <Sun className="mr-2 h-4 w-4" />
-            <span>Change Theme</span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-40">
-            <ThemeItem label="Light" value="light" active={theme === 'light'} onClick={setTheme} />
-            <ThemeItem label="Dark" value="dark" active={theme === 'dark'} onClick={setTheme} />
-            <ThemeItem
-              label="System"
-              value="system"
-              active={theme === 'system'}
-              onClick={setTheme}
-            />
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-
-        {/* Color Mode submenu */}
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>
-            <Palette className="mr-2 h-4 w-4" />
-            <span>Color Mode</span>
-          </DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="w-40">
-            {ACCENT_COLORS.map((c) => (
-              <AccentItem key={c} accent={c} active={accent === c} onClick={() => setAccent(c)} />
-            ))}
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-
-        <DropdownMenuItem onClick={handleSettings}>
-          <Settings className="mr-2 h-4 w-4" />
-          <span>Settings</span>
-        </DropdownMenuItem>
-
-        <DropdownMenuSeparator />
-
-        <DropdownMenuItem
-          onClick={handleSignOut}
-          className="text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-950 dark:focus:text-red-300"
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          className={cn(
+            'flex flex-1 items-center gap-2 rounded-md px-1.5 py-1 text-left transition-colors hover:bg-sidebar-accent/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sidebar-ring',
+            collapsed && 'justify-center px-0',
+          )}
+          aria-label="Open workspace menu"
         >
-          <LogOut className="mr-2 h-4 w-4" />
-          <span>Sign out</span>
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <Avatar className="h-7 w-7 shrink-0">
+            {user?.avatarUrl ? <AvatarImage src={user.avatarUrl} alt={user.fullName} /> : null}
+            <AvatarFallback className="text-[10px]">{initials(workspace.name)}</AvatarFallback>
+          </Avatar>
+          {!collapsed && (
+            <>
+              <span className="truncate text-sm font-medium">{workspace.name}</span>
+              <ChevronsUpDown className="ml-auto h-4 w-4 shrink-0 opacity-50" />
+            </>
+          )}
+        </DropdownMenuTrigger>
+
+        <DropdownMenuContent align="start" className="w-64">
+          {/* Profile summary */}
+          {user ? (
+            <>
+              <div className="flex items-center gap-2 p-2">
+                <Avatar className="h-9 w-9">
+                  {user.avatarUrl ? <AvatarImage src={user.avatarUrl} alt={user.fullName} /> : null}
+                  <AvatarFallback>{initials(user.fullName)}</AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-medium">{user.fullName}</p>
+                  <p className="truncate text-xs text-muted-foreground">{user.email}</p>
+                </div>
+              </div>
+              <DropdownMenuSeparator />
+            </>
+          ) : null}
+
+          {/* Workspace switcher — DropdownMenuLabel requires a Group ancestor
+            per Base UI, so the whole workspaces section is wrapped. */}
+          <DropdownMenuGroup>
+            <DropdownMenuLabel className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+              Workspaces
+            </DropdownMenuLabel>
+            {workspaces.data && workspaces.data.length > 0
+              ? workspaces.data.map((w) => (
+                  <DropdownMenuItem
+                    key={w.id}
+                    onClick={() => switchTo(w.slug, w.id, w.name)}
+                    className="pl-2"
+                  >
+                    <Avatar className="mr-2 h-5 w-5">
+                      <AvatarFallback className="text-[9px]">{initials(w.name)}</AvatarFallback>
+                    </Avatar>
+                    <span className="flex-1 truncate">{w.name}</span>
+                    {w.slug === workspace.slug ? (
+                      <Check className="ml-2 h-3.5 w-3.5" />
+                    ) : (
+                      <span className="ml-2 text-[10px] uppercase text-muted-foreground">
+                        {w.role.toLowerCase()}
+                      </span>
+                    )}
+                  </DropdownMenuItem>
+                ))
+              : null}
+            <DropdownMenuItem onClick={() => setCreateOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              <span>Create workspace</span>
+            </DropdownMenuItem>
+          </DropdownMenuGroup>
+          <DropdownMenuSeparator />
+
+          {/* Change Theme submenu */}
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Sun className="mr-2 h-4 w-4" />
+              <span>Change Theme</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-40">
+              <ThemeItem
+                label="Light"
+                value="light"
+                active={theme === 'light'}
+                onClick={setTheme}
+              />
+              <ThemeItem label="Dark" value="dark" active={theme === 'dark'} onClick={setTheme} />
+              <ThemeItem
+                label="System"
+                value="system"
+                active={theme === 'system'}
+                onClick={setTheme}
+              />
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+
+          {/* Color Mode submenu */}
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>
+              <Palette className="mr-2 h-4 w-4" />
+              <span>Color Mode</span>
+            </DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="w-40">
+              {ACCENT_COLORS.map((c) => (
+                <AccentItem key={c} accent={c} active={accent === c} onClick={() => setAccent(c)} />
+              ))}
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+
+          <DropdownMenuItem onClick={handleSettings}>
+            <Settings className="mr-2 h-4 w-4" />
+            <span>Settings</span>
+          </DropdownMenuItem>
+
+          <DropdownMenuSeparator />
+
+          <DropdownMenuItem
+            onClick={handleSignOut}
+            className="text-red-600 focus:bg-red-50 focus:text-red-700 dark:text-red-400 dark:focus:bg-red-950 dark:focus:text-red-300"
+          >
+            <LogOut className="mr-2 h-4 w-4" />
+            <span>Sign out</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <CreateWorkspaceModal open={createOpen} onOpenChange={setCreateOpen} />
+    </>
   );
 }
 
