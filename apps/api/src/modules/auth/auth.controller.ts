@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Patch,
   Post,
   Req,
   Res,
@@ -18,6 +19,7 @@ import { AuthService } from './auth.service';
 import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
 import { RefreshDto } from './dto/refresh.dto';
+import { UpdateMeDto } from './dto/update-me.dto';
 import type { GoogleProfileClaims } from './strategies/google.strategy';
 import type { AuthenticatedUser } from './strategies/jwt.strategy';
 
@@ -77,6 +79,18 @@ export class AuthController {
   @ApiOperation({ summary: 'Return the authenticated user + primary workspace' })
   me(@CurrentUser() user: AuthenticatedUser) {
     return this.authService.whoami(user);
+  }
+
+  /**
+   * Self-service profile update. Only fields the client sends are touched;
+   * omit a field to leave it alone. Username uniqueness is DB-enforced;
+   * a clash surfaces as 409.
+   */
+  @Patch('me')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: "Update the current user's profile fields" })
+  updateMe(@CurrentUser() user: AuthenticatedUser, @Body() dto: UpdateMeDto) {
+    return this.authService.updateProfile(user.id, dto);
   }
 
   /**

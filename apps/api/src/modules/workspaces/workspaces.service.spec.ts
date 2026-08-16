@@ -3,6 +3,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Role } from '@prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
+import type { WorkspaceProvisioningService } from '../auth/workspace-provisioning.service';
 import type { WorkspaceContext } from './guards/workspace-member.guard';
 import { WorkspacesService } from './workspaces.service';
 
@@ -96,7 +97,13 @@ describe('WorkspacesService', () => {
 
   beforeEach(() => {
     prisma = makeMockPrisma();
-    service = new WorkspacesService(prisma as unknown as PrismaService);
+    // WorkspaceProvisioningService is only exercised by `create()`, not covered
+    // in this spec — a bare stub keeps DI happy without pulling in Prisma
+    // transaction plumbing.
+    const provisioning = {
+      provisionCore: jest.fn(),
+    } as unknown as WorkspaceProvisioningService;
+    service = new WorkspacesService(prisma as unknown as PrismaService, provisioning);
   });
 
   describe('listForUser', () => {
