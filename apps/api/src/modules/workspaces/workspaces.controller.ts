@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -66,6 +67,18 @@ export class WorkspacesController {
   @ApiOperation({ summary: 'Leave a workspace (blocked for the sole OWNER)' })
   leave(@CurrentWorkspace() ws: WorkspaceContext) {
     return this.workspacesService.leave(ws);
+  }
+
+  /**
+   * Permanently delete a workspace. OWNER only. Cascades through every
+   * workspace-scoped row (members, statuses, projects, tasks, labels + all
+   * their subordinates). Irreversible.
+   */
+  @UseGuards(WorkspaceMemberGuard)
+  @Delete(':slug')
+  @ApiOperation({ summary: 'Delete a workspace and all its data (OWNER only)' })
+  remove(@CurrentWorkspace() ws: WorkspaceContext) {
+    return this.workspacesService.delete(ws);
   }
 
   /**

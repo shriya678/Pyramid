@@ -117,6 +117,27 @@ export class WorkspacesService {
   }
 
   /**
+   * Permanently delete a workspace. OWNER only.
+   *
+   * Data loss: cascades through every workspace-scoped row via Prisma's
+   * `onDelete: Cascade` — members, statuses, projects, tasks, labels,
+   * subordinate ProjectMember / TaskAssignee / TaskLabel / Comment /
+   * Resource / Activity rows. UserPreference is user-scoped, not
+   * workspace-scoped, so it survives untouched.
+   *
+   * The caller must confirm intent client-side (typed workspace name);
+   * we do NOT re-verify that here because the confirmation is UX, not
+   * security — the OWNER role check is the real gate.
+   */
+  async delete(ctx: WorkspaceContext): Promise<{ ok: true }> {
+    if (ctx.role !== Role.OWNER) {
+      throw new ForbiddenException('Only the workspace owner can delete it');
+    }
+    await this.prisma.workspace.delete({ where: { id: ctx.id } });
+    return { ok: true };
+  }
+
+  /**
    * Rename. OWNER-only for now — ADMIN role exists in the schema but no
    * flow currently grants it, so functionally OWNER === "the sole editor".
    */
