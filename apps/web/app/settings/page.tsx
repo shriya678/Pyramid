@@ -2,16 +2,20 @@
 
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
+import { LeaveWorkspacePanel } from '@/components/settings/leave-workspace-panel';
+import { ProfilePanel } from '@/components/settings/profile-panel';
 import { StatusesPanel } from '@/components/settings/statuses-panel';
 import { WorkspaceMembersPanel } from '@/components/settings/workspace-members-panel';
 import { useMyWorkspaceRole } from '@/lib/hooks/use-board-data';
 import { useAuthStore } from '@/lib/stores/auth-store';
 
 /**
- * Settings screen. First live section is the Workspace Members panel —
- * remaining sections (Profile, Theme, Color, Leave Workspace) will land
- * in follow-up PRs. Route sits outside the workspace shell because
- * Figma p13 gives Settings its own chrome.
+ * Settings screen. Route sits outside the workspace shell because Figma
+ * p13 gives Settings its own chrome. Sections top-to-bottom: Profile,
+ * Workspace Members, Statuses, Leave Workspace (destructive, at the
+ * bottom so it doesn't compete with routine settings).
+ *
+ * Theme + accent color pickers already live in the sidebar user menu.
  */
 export default function SettingsPage() {
   const workspace = useAuthStore((s) => s.workspace);
@@ -35,16 +39,18 @@ export default function SettingsPage() {
 
         {workspace && user ? (
           <div className="mt-8 space-y-6">
+            <ProfilePanel />
             <WorkspaceMembersPanel
               workspaceSlug={workspace.slug}
               workspaceRole={myRole ?? 'MEMBER'}
               currentUserId={user.id}
             />
             <StatusesPanel workspaceSlug={workspace.slug} workspaceRole={myRole ?? 'MEMBER'} />
-            <p className="text-xs text-muted-foreground">
-              Profile editing and Leave Workspace ship in a follow-up. The theme + accent color
-              pickers already work from the sidebar user menu.
-            </p>
+            <LeaveWorkspacePanel
+              workspaceSlug={workspace.slug}
+              workspaceName={workspace.name}
+              workspaceRole={myRole ?? 'MEMBER'}
+            />
           </div>
         ) : null}
       </div>
