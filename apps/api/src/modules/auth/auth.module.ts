@@ -5,6 +5,7 @@ import { PassportModule } from '@nestjs/passport';
 import type ms from 'ms';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
+import { GoogleAuthGuard } from './guards/google-auth.guard';
 import { GoogleStrategy } from './strategies/google.strategy';
 import { JwtStrategy } from './strategies/jwt.strategy';
 import { TokensService } from './tokens.service';
@@ -60,6 +61,7 @@ const googleStrategyProvider: Provider = {
     WorkspaceProvisioningService,
     JwtStrategy,
     googleStrategyProvider,
+    GoogleAuthGuard,
   ],
   exports: [AuthService, TokensService, WorkspaceProvisioningService],
 })

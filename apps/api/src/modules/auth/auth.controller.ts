@@ -4,6 +4,7 @@ import {
   Get,
   HttpCode,
   HttpStatus,
+  Logger,
   Patch,
   Post,
   Req,
@@ -11,6 +12,7 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { JwtService } from '@nestjs/jwt';
 import { AuthGuard } from '@nestjs/passport';
 import { Throttle } from '@nestjs/throttler';
 import { ApiBearerAuth, ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
@@ -20,15 +22,20 @@ import { CurrentUser } from './decorators/current-user.decorator';
 import { Public } from './decorators/public.decorator';
 import { RefreshDto } from './dto/refresh.dto';
 import { UpdateMeDto } from './dto/update-me.dto';
+import { isMergeConflict } from './errors';
+import { GoogleAuthGuard, type MergeStateClaims } from './guards/google-auth.guard';
 import type { GoogleProfileClaims } from './strategies/google.strategy';
 import type { AuthenticatedUser } from './strategies/jwt.strategy';
 
 @ApiTags('auth')
 @Controller('auth')
 export class AuthController {
+  private readonly logger = new Logger(AuthController.name);
+
   constructor(
     private readonly authService: AuthService,
     private readonly config: ConfigService,
+    private readonly jwt: JwtService,
   ) {}
 
   /**
@@ -98,9 +105,14 @@ export class AuthController {
    * browser to Google's consent screen; there's no controller body to run.
    * MUST be reached via a full page navigation (window.location =), not fetch,
    * so the browser can follow the 302 back through Google.
+   *
+   * Optional `?merge=<guest-jwt>` query param signals "upgrade this guest
+   * session to a Google account". `GoogleAuthGuard` validates the merge
+   * token and signs the guest user id into OAuth `state`; the callback
+   * reads it back.
    */
   @Public()
-  @UseGuards(AuthGuard('google'))
+  @UseGuards(GoogleAuthGuard)
   @Get('google')
   @ApiOperation({ summary: 'Start the Google OAuth flow (302 to Google consent)' })
   googleAuth(): void {
@@ -114,6 +126,12 @@ export class AuthController {
    * mint our own tokens, and hand the browser off to the frontend's
    * /auth/callback page with tokens in the URL query.
    *
+   * Merge branch: if `?state=` decodes as a valid `MergeStateClaims` JWT,
+   * we pass `mergeGuestId` to the service which upgrades the guest user
+   * in place instead of creating a new one. On merge conflict (Google
+   * account already exists), we redirect with `?error=merge_conflict`
+   * so the callback page can render a friendly message.
+   *
    * Hidden from Swagger — it's not a REST endpoint end-users would call.
    */
   @Public()
@@ -122,15 +140,50 @@ export class AuthController {
   @ApiExcludeEndpoint()
   async googleCallback(@Req() req: Request, @Res() res: Response): Promise<void> {
     const profile = req.user as GoogleProfileClaims;
-    const authed = await this.authService.handleGoogleLogin(profile);
-
     const frontendUrl = this.config.get<string>('FRONTEND_URL') ?? 'http://localhost:3000';
-    const params = new URLSearchParams({
-      token: authed.accessToken,
-      refresh: authed.refreshToken,
-      accessExp: authed.accessTokenExpiresAt,
-      refreshExp: authed.refreshTokenExpiresAt,
-    });
-    res.redirect(`${frontendUrl.split(',')[0].trim()}/auth/callback?${params.toString()}`);
+    const frontendBase = frontendUrl.split(',')[0].trim();
+
+    const mergeGuestId = this.decodeMergeState(req.query['state']);
+
+    try {
+      const authed = await this.authService.handleGoogleLogin(profile, mergeGuestId);
+      const params = new URLSearchParams({
+        token: authed.accessToken,
+        refresh: authed.refreshToken,
+        accessExp: authed.accessTokenExpiresAt,
+        refreshExp: authed.refreshTokenExpiresAt,
+      });
+      if (mergeGuestId) params.set('merged', '1');
+      res.redirect(`${frontendBase}/auth/callback?${params.toString()}`);
+    } catch (err) {
+      if (isMergeConflict(err)) {
+        const params = new URLSearchParams({
+          error: 'merge_conflict',
+          message: err.message,
+        });
+        res.redirect(`${frontendBase}/auth/callback?${params.toString()}`);
+        return;
+      }
+      throw err;
+    }
+  }
+
+  /**
+   * Verify the OAuth `state` param as a merge JWT. Returns the guest user
+   * id if valid, undefined otherwise. Any parsing/verification failure is
+   * silent — a corrupt/expired state falls through to a normal Google
+   * login rather than 500-ing.
+   */
+  private decodeMergeState(state: unknown): string | undefined {
+    if (!state || typeof state !== 'string') return undefined;
+    const secret = this.config.get<string>('JWT_SECRET');
+    if (!secret) return undefined;
+    try {
+      const claims = this.jwt.verify<MergeStateClaims>(state, { secret });
+      return typeof claims?.mergeGuestId === 'string' ? claims.mergeGuestId : undefined;
+    } catch (err) {
+      this.logger.warn(`invalid merge state on callback: ${(err as Error).message}`);
+      return undefined;
+    }
   }
 }

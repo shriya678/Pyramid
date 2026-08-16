@@ -1,6 +1,7 @@
 import { ConflictException, Injectable, Logger } from '@nestjs/common';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { MergeConflictError } from './errors';
 import type { AuthResponse, RefreshResponse } from './dto/auth-response.dto';
 import type { UpdateMeDto } from './dto/update-me.dto';
 import type { GoogleProfileClaims } from './strategies/google.strategy';
@@ -63,17 +64,24 @@ export class AuthService {
    * provision a workspace on the spot. Either way, issue a fresh token pair.
    *
    * Cases handled:
+   *   0. Merge (mergeGuestId set) → upgrade the guest user in place. Throws
+   *      MergeConflictError if the Google account is already used by a
+   *      different real user.
    *   1. Returning Google user (googleId match) → load, no side-effects.
    *   2. Existing user whose email matches but no googleId yet (e.g. someone
    *      who signed up with password) → attach googleId so future logins hit
    *      case 1 quickly. No new workspace.
    *   3. Brand new user → create User + provision workspace.
-   *
-   * Guest→Google merge (P1) is deliberately out of scope for this method —
-   * that flow needs a guest JWT to identify the caller, which we would carry
-   * through the OAuth state param. Left as a follow-up.
    */
-  async handleGoogleLogin(profile: GoogleProfileClaims): Promise<AuthResponse> {
+  async handleGoogleLogin(
+    profile: GoogleProfileClaims,
+    mergeGuestId?: string,
+  ): Promise<AuthResponse> {
+    // Case 0: guest → Google merge
+    if (mergeGuestId) {
+      return this.mergeGuestIntoGoogle(profile, mergeGuestId);
+    }
+
     // Case 1: fast path
     let user = await this.prisma.user.findUnique({
       where: { googleId: profile.googleId },
@@ -136,6 +144,105 @@ export class AuthService {
     const tokens = await this.tokens.issue({ id: user.id, isGuest: user.isGuest });
     this.logger.log(`Google login: ${user.username} → ${workspace.slug}`);
 
+    return { ...tokens, user, workspace };
+  }
+
+  /**
+   * Guest → Google upgrade. Same user row, same workspace, same tasks —
+   * we just attach Google credentials and clear the isGuest flag.
+   *
+   * Fails with MergeConflictError if the Google account is already used
+   * by a different real user — otherwise we'd silently take over their
+   * account. The frontend's /auth/callback handles this error and asks
+   * the user to sign out and use the existing Google account instead.
+   *
+   * Post-merge cleanup: revoke every refresh token for this user issued
+   * before the merge. The new access + refresh returned to the browser
+   * are what the client should carry forward — old ones are stale (the
+   * user's isGuest claim changed) and would confuse the picture.
+   */
+  private async mergeGuestIntoGoogle(
+    profile: GoogleProfileClaims,
+    mergeGuestId: string,
+  ): Promise<AuthResponse> {
+    // 1. Verify the merge target still exists AND is still a guest.
+    const guest = await this.prisma.user.findUnique({
+      where: { id: mergeGuestId },
+      select: { id: true, isGuest: true, email: true, username: true },
+    });
+    if (!guest) {
+      throw new MergeConflictError('Your guest session no longer exists. Please sign in again.');
+    }
+    if (!guest.isGuest) {
+      // Already a real user — no-op the merge and just log them in as normal.
+      // Shouldn't happen if the frontend gates the merge CTA on isGuest, but
+      // defensive against a stale merge token.
+      this.logger.warn(`merge target ${guest.id} is no longer a guest — ignoring merge`);
+      return this.handleGoogleLogin(profile);
+    }
+
+    // 2. Refuse if the Google account is already used by someone else.
+    const existingGoogle = await this.prisma.user.findFirst({
+      where: {
+        AND: [
+          { OR: [{ googleId: profile.googleId }, { email: profile.email }] },
+          { id: { not: guest.id } },
+        ],
+      },
+      select: { id: true, isGuest: true },
+    });
+    if (existingGoogle) {
+      throw new MergeConflictError(
+        'This Google account is already linked to another user. Sign out of the guest session and log in with Google directly to use that account.',
+      );
+    }
+
+    // 3. Upgrade in place.
+    const upgraded = await this.prisma.user.update({
+      where: { id: guest.id },
+      data: {
+        googleId: profile.googleId,
+        email: profile.email,
+        fullName: profile.fullName,
+        avatarUrl: profile.avatarUrl,
+        isGuest: false,
+      },
+      select: this.userSelect,
+    });
+
+    // 4. Load the user's primary workspace (the one auto-provisioned when
+    // they were a guest). Guest users always own exactly one workspace at
+    // this point (they can create more later).
+    const membership = await this.prisma.workspaceMember.findFirst({
+      where: { userId: upgraded.id },
+      orderBy: { joinedAt: 'asc' },
+      select: {
+        workspace: { select: { id: true, slug: true, name: true } },
+      },
+    });
+    if (!membership) {
+      // Genuinely shouldn't happen — a guest is always provisioned with a
+      // workspace. Defensive: provision a fresh one so we don't 500.
+      const ws = await this.provisioning.provision(upgraded);
+      return this.finishMerge(upgraded, { id: ws.id, slug: ws.slug, name: ws.name });
+    }
+
+    return this.finishMerge(upgraded, membership.workspace);
+  }
+
+  private async finishMerge(
+    user: AuthResponse['user'],
+    workspace: AuthResponse['workspace'],
+  ): Promise<AuthResponse> {
+    // Revoke every pre-merge refresh token — the claims baked into the old
+    // access tokens (isGuest=true) are now inconsistent with the DB. Clean
+    // slate.
+    await this.prisma.refreshToken.updateMany({
+      where: { userId: user.id, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    const tokens = await this.tokens.issue({ id: user.id, isGuest: user.isGuest });
+    this.logger.log(`Guest ${user.username} merged into Google (${user.email})`);
     return { ...tokens, user, workspace };
   }
 
