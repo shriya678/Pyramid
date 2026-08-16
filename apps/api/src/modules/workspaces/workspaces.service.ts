@@ -1,12 +1,21 @@
-import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { Role } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { WorkspaceProvisioningService } from '../auth/workspace-provisioning.service';
 import type { WorkspaceResponse } from './dto/workspace-response.dto';
 import type { WorkspaceContext } from './guards/workspace-member.guard';
 
 @Injectable()
 export class WorkspacesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly provisioning: WorkspaceProvisioningService,
+  ) {}
 
   /**
    * Lists all workspaces the given user is a member of, most recently joined
@@ -35,6 +44,27 @@ export class WorkspacesService {
   }
 
   /**
+   * User-invoked workspace creation. The caller becomes OWNER; the workspace
+   * gets default statuses only (no seeded teammates / demo project — that's
+   * reserved for first-login provisioning).
+   */
+  async create(userId: string, name: string): Promise<WorkspaceResponse> {
+    const user = await this.prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      select: { id: true, fullName: true, username: true },
+    });
+    const ws = await this.provisioning.provisionCore(user, { name, slugSeed: name });
+    return {
+      id: ws.id,
+      slug: ws.slug,
+      name: ws.name,
+      role: Role.OWNER,
+      createdAt: ws.createdAt.toISOString(),
+      updatedAt: ws.updatedAt.toISOString(),
+    };
+  }
+
+  /**
    * Detail view for a workspace the user has access to. The guard has already
    * validated membership by the time this runs — we just fetch the timestamps.
    */
@@ -55,6 +85,35 @@ export class WorkspacesService {
       createdAt: ws.createdAt.toISOString(),
       updatedAt: ws.updatedAt.toISOString(),
     };
+  }
+
+  /**
+   * Self-service leave. The caller removes their own membership from this
+   * workspace. Blocked for the sole OWNER — they would orphan the workspace
+   * (they'd need to delete it instead, which isn't wired up yet). Cascades
+   * their ProjectMember rows in this workspace so a later re-invite as a
+   * different role doesn't inherit stale project access.
+   */
+  async leave(ctx: WorkspaceContext): Promise<{ ok: true }> {
+    if (ctx.role === Role.OWNER) {
+      const ownerCount = await this.prisma.workspaceMember.count({
+        where: { workspaceId: ctx.id, role: Role.OWNER },
+      });
+      if (ownerCount <= 1) {
+        throw new BadRequestException(
+          'You are the sole owner of this workspace. Transfer ownership or delete the workspace instead.',
+        );
+      }
+    }
+    await this.prisma.$transaction(async (tx) => {
+      await tx.projectMember.deleteMany({
+        where: { userId: ctx.userId, project: { workspaceId: ctx.id } },
+      });
+      await tx.workspaceMember.delete({
+        where: { workspaceId_userId: { workspaceId: ctx.id, userId: ctx.userId } },
+      });
+    });
+    return { ok: true };
   }
 
   /**
