@@ -1,0 +1,30 @@
+import { api } from '../api';
+import type { Role } from './types';
+
+export interface WorkspaceListItem {
+  id: string;
+  slug: string;
+  name: string;
+  role: Role;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** All workspaces the current user is a member of, joined-desc. */
+export async function listWorkspaces(): Promise<WorkspaceListItem[]> {
+  const { data } = await api.get<WorkspaceListItem[]>('/workspaces');
+  return data;
+}
+
+export interface CreateWorkspaceInput {
+  name: string;
+}
+
+/**
+ * Create a new workspace. Caller becomes OWNER; server provisions default
+ * statuses only — no demo seed (see backend WorkspaceProvisioningService).
+ */
+export async function createWorkspace(input: CreateWorkspaceInput): Promise<WorkspaceListItem> {
+  const { data } = await api.post<WorkspaceListItem>('/workspaces', input);
+  return data;
+}
