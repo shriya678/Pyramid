@@ -3,7 +3,16 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useTheme } from 'next-themes';
-import { Check, ChevronsUpDown, LogOut, Palette, Plus, Settings, Sun } from 'lucide-react';
+import {
+  Check,
+  ChevronsUpDown,
+  LogOut,
+  Palette,
+  Plus,
+  Settings,
+  Sun,
+  UserRoundPlus,
+} from 'lucide-react';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -17,6 +26,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { apiConfig } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth-store';
 import { useWorkspaces } from '@/lib/hooks/use-workspaces';
@@ -74,6 +84,16 @@ export function WorkspaceMenu({ collapsed }: WorkspaceMenuProps) {
     router.push(`/w/${slug}/tasks`);
   };
 
+  const handleUpgradeToGoogle = () => {
+    // Full page navigation — the OAuth flow requires the browser to follow
+    // Google's 302 chain, not a fetch. Pass the current guest access token
+    // as ?merge=<jwt>; the backend GoogleAuthGuard signs its user id into
+    // OAuth state, and the callback upgrades the guest in place.
+    const token = useAuthStore.getState().accessToken;
+    if (!token) return;
+    window.location.href = `${apiConfig.baseUrl}/auth/google?merge=${encodeURIComponent(token)}`;
+  };
+
   return (
     <>
       <DropdownMenu>
@@ -106,10 +126,23 @@ export function WorkspaceMenu({ collapsed }: WorkspaceMenuProps) {
                   <AvatarFallback>{initials(user.fullName)}</AvatarFallback>
                 </Avatar>
                 <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{user.fullName}</p>
+                  <div className="flex items-center gap-1.5">
+                    <p className="truncate text-sm font-medium">{user.fullName}</p>
+                    {user.isGuest ? (
+                      <span className="shrink-0 rounded-sm bg-amber-100 px-1 py-px text-[9px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-950/50 dark:text-amber-300">
+                        Guest
+                      </span>
+                    ) : null}
+                  </div>
                   <p className="truncate text-xs text-muted-foreground">{user.email}</p>
                 </div>
               </div>
+              {user.isGuest ? (
+                <DropdownMenuItem onClick={handleUpgradeToGoogle}>
+                  <UserRoundPlus className="mr-2 h-4 w-4" />
+                  <span>Upgrade to Google account</span>
+                </DropdownMenuItem>
+              ) : null}
               <DropdownMenuSeparator />
             </>
           ) : null}
