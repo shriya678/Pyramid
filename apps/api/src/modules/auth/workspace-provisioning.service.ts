@@ -106,14 +106,23 @@ const DEMO_TASKS: Array<{
   },
 ];
 
+export interface ProvisionCoreOptions {
+  /** Explicit workspace name. Falls back to `"<FirstName>'s Workspace"`. */
+  name?: string;
+  /** Explicit slug seed for the unique-slug generator. Falls back to firstName. */
+  slugSeed?: string;
+}
+
 /**
- * Turns a freshly-created User into a fully usable workspace: their own
- * Workspace (they're OWNER), the four default Statuses so the board renders,
- * a UserPreference row with defaults, and 3 seeded fake teammates so the
- * assignee dropdown is populated from the moment they sign in.
- *
- * Called by AuthService both from the guest flow and (later) the Google flow
- * for first-time users.
+ * Turns a freshly-created User into a fully usable workspace. Two entry points:
+ *   - `provision(user)` — full first-login flow: core + demo seed data
+ *     (teammates + demo project + tasks). Used by guest login and Google
+ *     first-time sign-in so the board isn't empty out of the box.
+ *   - `provisionCore(user, opts?)` — bare workspace with just default
+ *     statuses + owner membership + preference row. Used by the
+ *     user-invoked `POST /workspaces` endpoint so the second and third
+ *     workspaces a user creates don't come pre-populated with a random
+ *     "Website Redesign" demo project and four fake teammates.
  */
 @Injectable()
 export class WorkspaceProvisioningService {
@@ -122,132 +131,154 @@ export class WorkspaceProvisioningService {
   constructor(private readonly prisma: PrismaService) {}
 
   async provision(user: Pick<User, 'id' | 'fullName' | 'username'>): Promise<Workspace> {
-    const firstName = user.fullName.split(' ')[0] || user.username;
-    const name = `${firstName}'s Workspace`;
-    const slug = await this.uniqueSlug(firstName);
-
     const workspace = await this.prisma.$transaction(async (tx) => {
-      const created = await tx.workspace.create({
-        data: {
-          name,
-          slug,
-          ownerId: user.id,
-          members: {
-            create: { userId: user.id, role: Role.OWNER },
-          },
-          statuses: {
-            create: DEFAULT_STATUSES,
-          },
-        },
-      });
-
-      // Seeded teammates + their memberships. Marked isSeeded so we can tell
-      // them apart from real users (and skip them in "invite by email" flows).
-      const seededUsers = await Promise.all(
-        SEEDED_TEAMMATES.map((t) =>
-          tx.user.create({
-            data: {
-              email: `${t.username}-${created.id}@seed.local`,
-              username: `${t.username}-${suffix()}`,
-              fullName: t.fullName,
-              title: t.title,
-              isSeeded: true,
-              // Deterministic avatar per teammate for consistency across reloads.
-              avatarUrl: `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(t.username)}`,
-              memberships: {
-                create: { workspaceId: created.id, role: t.role },
-              },
-            } satisfies Prisma.UserCreateInput,
-          }),
-        ),
-      );
-
-      // Seed one demo Project and attach the COLLABORATOR to it via
-      // ProjectMember. Owner is the "added by" so the audit trail reads well.
-      const demoProject = await tx.project.create({
-        data: {
-          workspaceId: created.id,
-          name: DEMO_PROJECT_NAME,
-          description: DEMO_PROJECT_DESCRIPTION,
-          priority: Priority.MEDIUM,
-          orderIndex: 1000,
-        },
-      });
-
-      const collaborator = seededUsers.find(
-        (u, i) => SEEDED_TEAMMATES[i].role === Role.COLLABORATOR,
-      );
-      if (collaborator) {
-        await tx.projectMember.create({
-          data: {
-            projectId: demoProject.id,
-            userId: collaborator.id,
-            addedById: user.id,
-          },
-        });
-      }
-
-      // Seed six demo tasks under the demo project so the board isn't empty
-      // on first login. Resolve status names to ids after Statuses were
-      // created above.
-      const statusRows = await tx.status.findMany({
-        where: { workspaceId: created.id },
-        select: { id: true, name: true },
-      });
-      const statusByName = new Map(statusRows.map((s) => [s.name, s.id]));
-      const nowMs = Date.now();
-      const dayMs = 24 * 60 * 60 * 1000;
-      for (const t of DEMO_TASKS) {
-        const statusId = statusByName.get(t.statusName);
-        if (!statusId) continue;
-        const assignee = t.assigneeIdx !== null ? seededUsers[t.assigneeIdx] : null;
-        await tx.task.create({
-          data: {
-            workspaceId: created.id,
-            projectId: demoProject.id,
-            statusId,
-            title: t.title,
-            priority: t.priority,
-            reporterId: user.id,
-            dueDate: t.dueDayOffset !== null ? new Date(nowMs + t.dueDayOffset * dayMs) : null,
-            orderInColumn: t.orderInColumn,
-            assignees: assignee ? { create: { userId: assignee.id } } : undefined,
-          },
-        });
-      }
-
-      // Upsert: re-provisioning is possible for an existing user whose
-      // workspace was deleted (edge case in AuthService.handleGoogleLogin).
-      // Their UserPreference row survives that deletion, so a fresh create
-      // would violate the userId unique constraint. Preserve whatever
-      // theme/accent they had.
-      await tx.userPreference.upsert({
-        where: { userId: user.id },
-        create: { userId: user.id }, // all defaults per Prisma schema
-        update: {},
-      });
-
+      const created = await this.createCore(tx, user, {});
+      await this.seedDemoContent(tx, created.id, user.id);
       return created;
     });
-
-    this.logger.log(`Provisioned workspace ${workspace.slug} for user ${user.id}`);
+    this.logger.log(`Provisioned workspace ${workspace.slug} for user ${user.id} (with demo seed)`);
     return workspace;
   }
 
-  private async uniqueSlug(firstName: string): Promise<string> {
+  async provisionCore(
+    user: Pick<User, 'id' | 'fullName' | 'username'>,
+    opts: ProvisionCoreOptions = {},
+  ): Promise<Workspace> {
+    const workspace = await this.prisma.$transaction((tx) => this.createCore(tx, user, opts));
+    this.logger.log(`Provisioned bare workspace ${workspace.slug} for user ${user.id}`);
+    return workspace;
+  }
+
+  /**
+   * Workspace + owner membership + default statuses + preference upsert. Runs
+   * inside a caller-supplied transaction so the demo seed (if any) shares the
+   * same atomic scope.
+   */
+  private async createCore(
+    tx: Prisma.TransactionClient,
+    user: Pick<User, 'id' | 'fullName' | 'username'>,
+    opts: ProvisionCoreOptions,
+  ): Promise<Workspace> {
+    const firstName = user.fullName.split(' ')[0] || user.username;
+    const name = opts.name?.trim() || `${firstName}'s Workspace`;
+    const slug = await this.uniqueSlug(opts.slugSeed ?? name);
+
+    const created = await tx.workspace.create({
+      data: {
+        name,
+        slug,
+        ownerId: user.id,
+        members: {
+          create: { userId: user.id, role: Role.OWNER },
+        },
+        statuses: {
+          create: DEFAULT_STATUSES,
+        },
+      },
+    });
+
+    // Upsert: re-provisioning is possible for an existing user whose original
+    // workspace was deleted. Their UserPreference row survives that deletion,
+    // so a fresh create would violate the userId unique constraint. Preserve
+    // whatever theme/accent they had.
+    await tx.userPreference.upsert({
+      where: { userId: user.id },
+      create: { userId: user.id },
+      update: {},
+    });
+
+    return created;
+  }
+
+  /**
+   * Fake teammates + a demo project + 6 demo tasks. Only used on first-login
+   * provisioning — user-created workspaces stay clean.
+   */
+  private async seedDemoContent(
+    tx: Prisma.TransactionClient,
+    workspaceId: string,
+    ownerUserId: string,
+  ): Promise<void> {
+    // Seeded teammates + their memberships. Marked isSeeded so we can tell
+    // them apart from real users (and skip them in "invite by email" flows).
+    const seededUsers = await Promise.all(
+      SEEDED_TEAMMATES.map((t) =>
+        tx.user.create({
+          data: {
+            email: `${t.username}-${workspaceId}@seed.local`,
+            username: `${t.username}-${suffix()}`,
+            fullName: t.fullName,
+            title: t.title,
+            isSeeded: true,
+            avatarUrl: `https://api.dicebear.com/9.x/avataaars/svg?seed=${encodeURIComponent(t.username)}`,
+            memberships: {
+              create: { workspaceId, role: t.role },
+            },
+          } satisfies Prisma.UserCreateInput,
+        }),
+      ),
+    );
+
+    const demoProject = await tx.project.create({
+      data: {
+        workspaceId,
+        name: DEMO_PROJECT_NAME,
+        description: DEMO_PROJECT_DESCRIPTION,
+        priority: Priority.MEDIUM,
+        orderIndex: 1000,
+      },
+    });
+
+    const collaborator = seededUsers.find((_, i) => SEEDED_TEAMMATES[i].role === Role.COLLABORATOR);
+    if (collaborator) {
+      await tx.projectMember.create({
+        data: {
+          projectId: demoProject.id,
+          userId: collaborator.id,
+          addedById: ownerUserId,
+        },
+      });
+    }
+
+    const statusRows = await tx.status.findMany({
+      where: { workspaceId },
+      select: { id: true, name: true },
+    });
+    const statusByName = new Map(statusRows.map((s) => [s.name, s.id]));
+    const nowMs = Date.now();
+    const dayMs = 24 * 60 * 60 * 1000;
+    for (const t of DEMO_TASKS) {
+      const statusId = statusByName.get(t.statusName);
+      if (!statusId) continue;
+      const assignee = t.assigneeIdx !== null ? seededUsers[t.assigneeIdx] : null;
+      await tx.task.create({
+        data: {
+          workspaceId,
+          projectId: demoProject.id,
+          statusId,
+          title: t.title,
+          priority: t.priority,
+          reporterId: ownerUserId,
+          dueDate: t.dueDayOffset !== null ? new Date(nowMs + t.dueDayOffset * dayMs) : null,
+          orderInColumn: t.orderInColumn,
+          assignees: assignee ? { create: { userId: assignee.id } } : undefined,
+        },
+      });
+    }
+  }
+
+  private async uniqueSlug(seed: string): Promise<string> {
     const base =
-      firstName
+      seed
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, '-')
         .replace(/^-+|-+$/g, '')
         .slice(0, 24) || 'workspace';
-    // First try the plain slug, then append short random suffixes on collision.
     for (let attempt = 0; attempt < 5; attempt++) {
       const candidate = attempt === 0 ? base : `${base}-${suffix()}`;
       const clash = await this.prisma.workspace.findUnique({ where: { slug: candidate } });
       if (!clash) return candidate;
     }
-    // Fallback: guaranteed-unique long suffix.
     return `${base}-${suffix(8)}`;
   }
 }
