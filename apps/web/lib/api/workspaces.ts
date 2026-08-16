@@ -28,3 +28,12 @@ export async function createWorkspace(input: CreateWorkspaceInput): Promise<Work
   const { data } = await api.post<WorkspaceListItem>('/workspaces', input);
   return data;
 }
+
+/**
+ * Self-service leave. Backend blocks the sole OWNER (400); other members
+ * succeed and have their ProjectMember rows in this workspace cascaded.
+ */
+export async function leaveWorkspace(slug: string): Promise<{ ok: true }> {
+  const { data } = await api.post<{ ok: true }>(`/workspaces/${slug}/leave`);
+  return data;
+}
