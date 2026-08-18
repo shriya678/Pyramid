@@ -41,11 +41,12 @@ export default function InterceptedTaskDetailPage({
           workspaceSlug={slug}
           taskId={id}
           onDeleted={() => router.back()}
-          // Expand → break the intercept with a hard nav to the /full
-          // page, which renders TaskDetail edge-to-edge with no modal or
-          // board underneath.
+          // Expand → open the /full page in a NEW tab. Users kept losing
+          // their board context when the expand replaced the current tab;
+          // opening in a new tab lets them keep the board open and refer
+          // between the two.
           onExpandToFullPage={() => {
-            window.location.assign(`/w/${slug}/t/${id}/full`);
+            window.open(`/w/${slug}/t/${id}/full`, '_blank', 'noopener,noreferrer');
           }}
         />
       </DialogContent>
