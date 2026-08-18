@@ -1,7 +1,10 @@
 import Link from '@tiptap/extension-link';
+import Mention from '@tiptap/extension-mention';
 import Placeholder from '@tiptap/extension-placeholder';
 import StarterKit from '@tiptap/starter-kit';
 import type { Extensions } from '@tiptap/react';
+import type { SuggestionOptions } from '@tiptap/suggestion';
+import type { MentionItem } from './mention-suggestion-list';
 
 /**
  * Extension set shared by RichTextEditor + RichTextViewer so writes and
@@ -14,20 +17,24 @@ import type { Extensions } from '@tiptap/react';
  *     horizontalRule, history (undo/redo)
  *   - Link: autolink + click-open handling; renders as <a> with underline
  *   - Placeholder: empty-editor hint text (editor only — Viewer ignores it)
+ *   - Mention: @-typeahead extension. Emits `type: 'mention'` nodes with
+ *     `attrs.id` (userId) and `attrs.label` (username). The composer wires
+ *     the suggestion pipeline; the viewer just needs the node schema so
+ *     mention nodes render correctly on read.
  *
- * Later phases add: text color, mention (replaces regex parser), image
- * with resize, file attachment node, slash-command menu.
+ * The `mentionSuggestion` argument is optional so the viewer can use the
+ * same extensions without needing to know about the picker.
  */
-export function richTextExtensions(placeholder?: string): Extensions {
+export function richTextExtensions(opts?: {
+  placeholder?: string;
+  mentionSuggestion?: Omit<SuggestionOptions<MentionItem>, 'editor'>;
+}): Extensions {
   return [
     StarterKit.configure({
-      // Newlines in the source become hard breaks (Shift+Enter equivalent)
-      // rather than paragraph breaks — matches how paste-from-plaintext
-      // reads more naturally in a chat/comment context.
       heading: { levels: [1, 2, 3] },
     }),
     Link.configure({
-      openOnClick: false, // Viewer will render as clickable; editor stays inert on click.
+      openOnClick: false,
       autolink: true,
       HTMLAttributes: {
         rel: 'noopener noreferrer nofollow',
@@ -36,9 +43,27 @@ export function richTextExtensions(placeholder?: string): Extensions {
       },
     }),
     Placeholder.configure({
-      placeholder: placeholder ?? 'Write something…',
+      placeholder: opts?.placeholder ?? 'Write something…',
       showOnlyWhenEditable: true,
       showOnlyCurrent: false,
+    }),
+    // Mention node schema is always registered — the viewer needs it to
+    // render `type: 'mention'` nodes correctly. The suggestion behavior
+    // (dropdown, filter, insert) only wires when opts.mentionSuggestion
+    // is provided.
+    Mention.configure({
+      HTMLAttributes: {
+        class: 'rounded bg-primary/15 px-1 font-medium text-primary [&]:no-underline',
+      },
+      // renderText controls how the mention serializes to plain text —
+      // extractPlainText uses this shape for notification previews.
+      renderText: ({ node }) => `@${node.attrs.label ?? node.attrs.id}`,
+      renderHTML: ({ options, node }) => [
+        'span',
+        { ...options.HTMLAttributes, 'data-mention-id': node.attrs.id },
+        `@${node.attrs.label ?? node.attrs.id}`,
+      ],
+      suggestion: opts?.mentionSuggestion,
     }),
   ];
 }
