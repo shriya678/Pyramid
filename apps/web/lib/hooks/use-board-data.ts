@@ -9,7 +9,7 @@ import {
   updateComment,
   type CreateCommentInput,
 } from '../api/comments';
-import { listLabels } from '../api/labels';
+import { createLabel, listLabels, type CreateLabelInput } from '../api/labels';
 import {
   createResource,
   deleteResource,
@@ -85,6 +85,22 @@ export function useLabels(slug: string) {
     queryKey: boardKeys.labels(slug),
     queryFn: () => listLabels(slug),
     enabled: Boolean(slug),
+  });
+}
+
+/**
+ * Create a new workspace label. Callers get the created LabelResponse in
+ * onSuccess so they can immediately assign it to a task without waiting
+ * for the invalidated list to refetch (matters for the inline create-and-
+ * assign flow in the task-detail picker).
+ */
+export function useCreateLabel(slug: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateLabelInput) => createLabel(slug, input),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: boardKeys.labels(slug) });
+    },
   });
 }
 
