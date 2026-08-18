@@ -1,10 +1,15 @@
-import { IsOptional, IsString, MaxLength, MinLength } from 'class-validator';
+import { IsObject, IsOptional, IsString } from 'class-validator';
 
+/**
+ * Body is now a ProseMirror JSON document (TipTap output shape). Full
+ * structural validation happens in the service — here we just gate that
+ * it's an object at all; class-validator can't cheaply express the whole
+ * ProseMirror grammar and doing so would duplicate what the editor
+ * already guarantees on the client.
+ */
 export class CreateCommentDto {
-  @IsString()
-  @MinLength(1)
-  @MaxLength(5000)
-  body!: string;
+  @IsObject()
+  body!: Record<string, unknown>;
 
   /**
    * If set, the new comment is a reply. The parent must be a top-level comment

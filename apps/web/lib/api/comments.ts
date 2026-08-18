@@ -1,4 +1,5 @@
 import { api } from '../api';
+import type { ProseMirrorDoc } from '../prosemirror-doc';
 import type { CommentResponse, ThreadedCommentResponse } from './types';
 
 export async function listComments(
@@ -12,7 +13,7 @@ export async function listComments(
 }
 
 export interface CreateCommentInput {
-  body: string;
+  body: ProseMirrorDoc;
   parentCommentId?: string;
 }
 
@@ -32,7 +33,7 @@ export async function updateComment(
   slug: string,
   taskId: string,
   commentId: string,
-  body: string,
+  body: ProseMirrorDoc,
 ): Promise<CommentResponse> {
   const { data } = await api.patch<CommentResponse>(
     `/workspaces/${slug}/tasks/${taskId}/comments/${commentId}`,

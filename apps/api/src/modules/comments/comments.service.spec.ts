@@ -23,11 +23,28 @@ const noopNotifications = {
   emitMentions: async () => undefined,
 } as unknown as NotificationsService;
 
+/**
+ * Wrap a plain string in a minimal ProseMirror doc — matches how the
+ * TipTap-based composer submits simple text-only comments. Empty string
+ * → empty paragraph, matching what the migration produced for legacy
+ * empty rows.
+ */
+function docOf(text: string): Record<string, unknown> {
+  return {
+    type: 'doc',
+    content: [
+      text === ''
+        ? { type: 'paragraph' }
+        : { type: 'paragraph', content: [{ type: 'text', text }] },
+    ],
+  };
+}
+
 interface CommentRow {
   id: string;
   taskId: string;
   authorId: string;
-  body: string;
+  body: Record<string, unknown>;
   parentCommentId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -162,7 +179,7 @@ function makeComment(overrides: Partial<CommentRow>): CommentRow {
     id: overrides.id ?? 'c-seed',
     taskId: overrides.taskId ?? 't-1',
     authorId: overrides.authorId ?? 'u-alice',
-    body: overrides.body ?? 'seed body',
+    body: overrides.body ?? docOf('seed body'),
     parentCommentId: overrides.parentCommentId ?? null,
     createdAt: overrides.createdAt ?? new Date(Date.now() - 1000),
     updatedAt: overrides.updatedAt ?? new Date(Date.now() - 1000),
@@ -190,11 +207,11 @@ describe('CommentsService', () => {
   // ---------------------------------------------------------------------------
   describe('listForTask', () => {
     it('returns top-level comments with replies nested', async () => {
-      prisma.__seed(makeComment({ id: 'c-a', taskId: 't-1', body: 'top A' }));
+      prisma.__seed(makeComment({ id: 'c-a', taskId: 't-1', body: docOf('top A') }));
       prisma.__seed(
-        makeComment({ id: 'c-a-r1', taskId: 't-1', parentCommentId: 'c-a', body: 'reply' }),
+        makeComment({ id: 'c-a-r1', taskId: 't-1', parentCommentId: 'c-a', body: docOf('reply') }),
       );
-      prisma.__seed(makeComment({ id: 'c-b', taskId: 't-1', body: 'top B' }));
+      prisma.__seed(makeComment({ id: 'c-b', taskId: 't-1', body: docOf('top B') }));
 
       const list = await service.listForTask(ws1, 't-1');
       expect(list.map((c) => c.id)).toEqual(['c-a', 'c-b']);
@@ -212,8 +229,8 @@ describe('CommentsService', () => {
   // ---------------------------------------------------------------------------
   describe('create', () => {
     it('any workspace member can create a comment; writes COMMENT_ADDED activity', async () => {
-      const c = await service.create(memberCtx, 'u-bob', 't-1', { body: 'hello' });
-      expect(c.body).toBe('hello');
+      const c = await service.create(memberCtx, 'u-bob', 't-1', { body: docOf('hello') });
+      expect(c.body).toEqual(docOf('hello'));
       expect(prisma.__activities.filter((a) => a.type === 'COMMENT_ADDED')).toHaveLength(1);
       expect(prisma.__activities[0].payload).toEqual({ commentId: c.id, isReply: false });
     });
@@ -222,7 +239,7 @@ describe('CommentsService', () => {
       prisma.__seed(makeComment({ id: 'c-parent-other', taskId: 't-other' }));
       await expect(
         service.create(ws1, 'u-alice', 't-1', {
-          body: 'r',
+          body: docOf('r'),
           parentCommentId: 'c-parent-other',
         }),
       ).rejects.toBeInstanceOf(BadRequestException);
@@ -232,21 +249,39 @@ describe('CommentsService', () => {
       prisma.__seed(makeComment({ id: 'c-top', taskId: 't-1' }));
       prisma.__seed(makeComment({ id: 'c-reply', taskId: 't-1', parentCommentId: 'c-top' }));
       await expect(
-        service.create(ws1, 'u-alice', 't-1', { body: 'nope', parentCommentId: 'c-reply' }),
+        service.create(ws1, 'u-alice', 't-1', {
+          body: docOf('nope'),
+          parentCommentId: 'c-reply',
+        }),
       ).rejects.toBeInstanceOf(BadRequestException);
     });
 
     it('creating on a cross-workspace task → 404', async () => {
       await expect(
-        service.create(ws1, 'u-alice', 't-other', { body: 'sneak' }),
+        service.create(ws1, 'u-alice', 't-other', { body: docOf('sneak') }),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
 
     it('payload marks isReply correctly', async () => {
       prisma.__seed(makeComment({ id: 'c-top', taskId: 't-1' }));
-      await service.create(ws1, 'u-alice', 't-1', { body: 'reply', parentCommentId: 'c-top' });
+      await service.create(ws1, 'u-alice', 't-1', {
+        body: docOf('reply'),
+        parentCommentId: 'c-top',
+      });
       const act = prisma.__activities.find((a) => a.type === 'COMMENT_ADDED');
       expect(act?.payload).toMatchObject({ isReply: true });
+    });
+
+    it('rejects an empty doc (matches old @MinLength(1) behavior)', async () => {
+      await expect(
+        service.create(ws1, 'u-alice', 't-1', { body: docOf('') }),
+      ).rejects.toBeInstanceOf(BadRequestException);
+    });
+
+    it('rejects a body that is not a doc node', async () => {
+      await expect(
+        service.create(ws1, 'u-alice', 't-1', { body: { type: 'paragraph' } }),
+      ).rejects.toBeInstanceOf(BadRequestException);
     });
   });
 
@@ -255,22 +290,26 @@ describe('CommentsService', () => {
   // ---------------------------------------------------------------------------
   describe('update', () => {
     it('author can edit their own comment', async () => {
-      prisma.__seed(makeComment({ id: 'c-1', taskId: 't-1', authorId: 'u-alice', body: 'old' }));
-      const updated = await service.update(ws1, 'u-alice', 't-1', 'c-1', { body: 'new' });
-      expect(updated.body).toBe('new');
+      prisma.__seed(
+        makeComment({ id: 'c-1', taskId: 't-1', authorId: 'u-alice', body: docOf('old') }),
+      );
+      const updated = await service.update(ws1, 'u-alice', 't-1', 'c-1', { body: docOf('new') });
+      expect(updated.body).toEqual(docOf('new'));
     });
 
     it('non-author cannot edit even as OWNER', async () => {
-      prisma.__seed(makeComment({ id: 'c-1', taskId: 't-1', authorId: 'u-alice', body: 'old' }));
+      prisma.__seed(
+        makeComment({ id: 'c-1', taskId: 't-1', authorId: 'u-alice', body: docOf('old') }),
+      );
       await expect(
-        service.update(ws1, 'u-bob', 't-1', 'c-1', { body: 'rewritten' }),
+        service.update(ws1, 'u-bob', 't-1', 'c-1', { body: docOf('rewritten') }),
       ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
     it('comment on a different task → 404', async () => {
       prisma.__seed(makeComment({ id: 'c-x', taskId: 't-other' }));
       await expect(
-        service.update(ws1, 'u-alice', 't-1', 'c-x', { body: 'x' }),
+        service.update(ws1, 'u-alice', 't-1', 'c-x', { body: docOf('x') }),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });

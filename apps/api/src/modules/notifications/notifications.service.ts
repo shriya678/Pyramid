@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { NotificationType, type Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
+import { extractPlainText, type ProseMirrorDoc } from '../comments/prosemirror-doc';
 import { extractMentionedUsernames } from './mention-parser';
 
 export interface NotificationActorMini {
@@ -144,10 +145,14 @@ export class NotificationsService {
       workspaceId: string;
       taskId: string;
       commentId: string;
-      body: string;
+      body: ProseMirrorDoc;
     },
   ): Promise<void> {
-    const usernames = extractMentionedUsernames(args.body);
+    // Interim: flatten the doc to plain text and reuse the regex parser
+    // until phase 7 replaces this with structural `type: 'mention'` node
+    // detection produced by the TipTap Mention extension.
+    const plainText = extractPlainText(args.body);
+    const usernames = extractMentionedUsernames(plainText);
     if (usernames.length === 0) return;
 
     // Look up matching workspace members. Filter server-side so we don't

@@ -13,6 +13,7 @@ import {
   useUpdateComment,
 } from '@/lib/hooks/use-board-data';
 import { useAuthStore } from '@/lib/stores/auth-store';
+import { docOfPlainText, docToPlainText } from '@/lib/prosemirror-doc';
 import { CommentComposer } from './comment-composer';
 import { MentionText } from './mention-text';
 
@@ -47,7 +48,7 @@ export function CommentsPanel({ workspaceSlug, taskId, workspaceRole }: Comments
       </header>
 
       <CommentComposer
-        onSubmit={(body) => create.mutate({ body })}
+        onSubmit={(body) => create.mutate({ body: docOfPlainText(body) })}
         isSubmitting={create.isPending}
         submitLabel="Comment"
         placeholder="Write a comment… @ to mention a teammate"
@@ -125,7 +126,7 @@ function CommentThread({
                 autoFocus
                 onSubmit={(body) => {
                   create.mutate(
-                    { body, parentCommentId: comment.id },
+                    { body: docOfPlainText(body), parentCommentId: comment.id },
                     { onSuccess: () => setReplying(false) },
                   );
                 }}
@@ -189,10 +190,10 @@ function CommentRow({
         {editing ? (
           <CommentComposer
             autoFocus
-            initialBody={comment.body}
+            initialBody={docToPlainText(comment.body)}
             onSubmit={(body) => {
               update.mutate(
-                { commentId: comment.id, body },
+                { commentId: comment.id, body: docOfPlainText(body) },
                 { onSuccess: () => setEditing(false) },
               );
             }}
@@ -204,7 +205,7 @@ function CommentRow({
           />
         ) : (
           <p className="whitespace-pre-wrap text-sm">
-            <MentionText body={comment.body} />
+            <MentionText body={docToPlainText(comment.body)} />
           </p>
         )}
 

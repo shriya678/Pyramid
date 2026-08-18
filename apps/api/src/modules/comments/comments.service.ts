@@ -4,7 +4,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ActivityType, Role, type Comment, type User } from '@prisma/client';
+import { ActivityType, Prisma, Role, type Comment, type User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -12,6 +12,7 @@ import { ProjectAccessService } from '../projects/project-access.service';
 import type { WorkspaceContext } from '../workspaces/guards/workspace-member.guard';
 import type { CreateCommentDto } from './dto/create-comment.dto';
 import type { UpdateCommentDto } from './dto/update-comment.dto';
+import { validateDoc, type ProseMirrorDoc } from './prosemirror-doc';
 
 export interface CommentAuthorMini {
   id: string;
@@ -23,7 +24,12 @@ export interface CommentAuthorMini {
 export interface CommentResponse {
   id: string;
   taskId: string;
-  body: string;
+  /**
+   * ProseMirror JSON document (TipTap output). Legacy plain-text comments
+   * were migrated to a single-paragraph doc at the schema-change migration
+   * so this shape is uniform across every row.
+   */
+  body: ProseMirrorDoc;
   author: CommentAuthorMini;
   parentCommentId: string | null;
   createdAt: string;
@@ -49,7 +55,10 @@ const AUTHOR_SELECT = {
 const toResponse = (c: CommentWithAuthor): CommentResponse => ({
   id: c.id,
   taskId: c.taskId,
-  body: c.body,
+  // Prisma types the JSONB column as `JsonValue`; we know every row is a
+  // ProseMirrorDoc because the migration backfilled every legacy plain-text
+  // row into that shape and new writes go through validateDoc.
+  body: c.body as unknown as ProseMirrorDoc,
   author: c.author,
   parentCommentId: c.parentCommentId,
   createdAt: c.createdAt.toISOString(),
@@ -102,13 +111,14 @@ export class CommentsService {
     if (dto.parentCommentId) {
       await this.requireParentComment(taskId, dto.parentCommentId);
     }
+    const doc = validateDoc(dto.body);
 
     const created = await this.prisma.$transaction(async (tx) => {
       const c = await tx.comment.create({
         data: {
           taskId,
           authorId: actorId,
-          body: dto.body,
+          body: doc as unknown as Prisma.InputJsonValue,
           parentCommentId: dto.parentCommentId ?? null,
         },
         include: { author: { select: AUTHOR_SELECT } },
@@ -127,7 +137,7 @@ export class CommentsService {
         workspaceId: ctx.id,
         taskId,
         commentId: c.id,
-        body: c.body,
+        body: doc,
       });
       return c;
     });
@@ -151,9 +161,10 @@ export class CommentsService {
     if (existing.authorId !== actorId) {
       throw new ForbiddenException('You can only edit your own comments');
     }
+    const doc = validateDoc(dto.body);
     const updated = await this.prisma.comment.update({
       where: { id: existing.id },
-      data: { body: dto.body },
+      data: { body: doc as unknown as Prisma.InputJsonValue },
       include: { author: { select: AUTHOR_SELECT } },
     });
     return toResponse(updated);
