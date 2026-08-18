@@ -1,7 +1,11 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { NotificationType, type Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
-import { extractPlainText, type ProseMirrorDoc } from '../comments/prosemirror-doc';
+import {
+  extractMentionedUserIds,
+  extractPlainText,
+  type ProseMirrorDoc,
+} from '../comments/prosemirror-doc';
 import { extractMentionedUsernames } from './mention-parser';
 
 export interface NotificationActorMini {
@@ -148,15 +152,20 @@ export class NotificationsService {
       body: ProseMirrorDoc;
     },
   ): Promise<void> {
-    // Interim: flatten the doc to plain text and reuse the regex parser
-    // until phase 7 replaces this with structural `type: 'mention'` node
-    // detection produced by the TipTap Mention extension.
+    // Structural pass first: TipTap's Mention extension emits nodes with
+    // the userId baked into attrs.id, so we can deliver by id directly —
+    // no string matching, no seeded-user surprise, no dead-username
+    // ambiguity.
+    const structuralIds = extractMentionedUserIds(args.body);
+
+    // Legacy pass second: also parse plain text for @username tokens the
+    // user may have typed by hand (e.g. from a mobile keyboard that doesn't
+    // trigger the picker, or from a raw paste). Backwards compatible with
+    // pre-Mention-extension comments too.
     const plainText = extractPlainText(args.body);
     const usernames = extractMentionedUsernames(plainText);
-    if (usernames.length === 0) {
-      // Only log when the body actually contains an @ — otherwise every
-      // comment ever generates noise. Helps QA answer "why didn't my
-      // mention fire" quickly.
+
+    if (structuralIds.length === 0 && usernames.length === 0) {
       if (plainText.includes('@')) {
         this.logger.log(
           `emitMentions: no @username tokens matched for comment ${args.commentId} (plainText=${JSON.stringify(plainText.slice(0, 200))})`,
@@ -165,26 +174,26 @@ export class NotificationsService {
       return;
     }
 
-    // Look up matching workspace members. Filter server-side so we don't
-    // notify users outside the workspace even if they happen to share the
-    // username string.
+    // Resolve to a set of concrete member rows. Combines both paths in
+    // one query so we don't hit the DB twice.
     const members = await tx.workspaceMember.findMany({
       where: {
         workspaceId: args.workspaceId,
         userId: { not: args.actorId },
         user: {
-          username: { in: usernames },
-          isSeeded: false,
+          OR: [
+            structuralIds.length > 0 ? { id: { in: structuralIds } } : { id: '__no__' },
+            usernames.length > 0
+              ? { username: { in: usernames }, isSeeded: false }
+              : { id: '__no__' },
+          ],
         },
       },
       select: { userId: true, user: { select: { username: true } } },
     });
     if (members.length === 0) {
-      // Common cause: the mentioned username doesn't exist in this
-      // workspace, OR it belongs to a seeded fake teammate (filtered
-      // out because they can't log in to read the notification).
       this.logger.log(
-        `emitMentions: parsed @usernames=[${usernames.join(', ')}] but no real workspace members matched for comment ${args.commentId}`,
+        `emitMentions: parsed structuralIds=[${structuralIds.join(', ')}] usernames=[${usernames.join(', ')}] but no real workspace members matched for comment ${args.commentId}`,
       );
       return;
     }
