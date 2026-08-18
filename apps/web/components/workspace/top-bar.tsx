@@ -5,6 +5,7 @@ import type { ReactNode } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { useAppShell } from './app-shell';
+import { NotificationsBell } from './notifications-bell';
 
 interface TopBarProps {
   /** Left-aligned page title (e.g. "Tasks", "Projects", "Design Homepage"). */
@@ -41,12 +42,15 @@ export function TopBar({ title, actions }: TopBarProps) {
 
       <h1 className="shrink-0 truncate text-lg font-semibold">{title}</h1>
 
-      {actions ? (
-        // Scrollable actions strip. On desktop everything fits and the strip
-        // is invisible. On narrow viewports the actions overflow horizontally
-        // inside the header instead of pushing the page sideways.
-        <div className="ml-auto flex min-w-0 items-center gap-2 overflow-x-auto">{actions}</div>
-      ) : null}
+      {/* Right-hand region: page-specific actions + always-present bell. The
+          bell sits outside the scrollable actions strip so it stays pinned on
+          narrow viewports even when the actions overflow. */}
+      <div className="ml-auto flex min-w-0 items-center gap-2">
+        {actions ? (
+          <div className="flex min-w-0 items-center gap-2 overflow-x-auto">{actions}</div>
+        ) : null}
+        <NotificationsBell />
+      </div>
     </header>
   );
 }
