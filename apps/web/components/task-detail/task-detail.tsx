@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { CalendarDays, Maximize2, Trash2 } from 'lucide-react';
 import { ActivityFeed } from './activity-feed';
 import { CommentsPanel } from './comments-panel';
+import { CreateLabelPopover } from './create-label-popover';
 import { ResourcesPanel } from './resources-panel';
 import { SubtasksPanel } from './subtasks-panel';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -175,6 +176,18 @@ function TaskDetailBody({
       const next = new Set(prev);
       if (next.has(labelId)) next.delete(labelId);
       else next.add(labelId);
+      lastCommittedLabelsRef.current = [...next].sort().join(',');
+      update.mutate({ taskId: task.id, input: { labelIds: [...next] } });
+      return next;
+    });
+  };
+
+  /** After creating a label inline, assign it to this task in the same gesture. */
+  const assignNewLabel = (labelId: string) => {
+    setLabelIds((prev) => {
+      if (prev.has(labelId)) return prev;
+      const next = new Set(prev);
+      next.add(labelId);
       lastCommittedLabelsRef.current = [...next].sort().join(',');
       update.mutate({ taskId: task.id, input: { labelIds: [...next] } });
       return next;
@@ -354,16 +367,25 @@ function TaskDetailBody({
 
           {/* Labels */}
           <FieldRow label="Labels">
-            <ChipToggleList
-              items={(labels.data ?? []).map((l) => ({
-                id: l.id,
-                label: l.name,
-                colour: l.color,
-              }))}
-              selected={labelIds}
-              onToggle={toggleLabel}
-              empty="No labels defined yet"
-            />
+            <div className="space-y-1.5">
+              <ChipToggleList
+                items={(labels.data ?? []).map((l) => ({
+                  id: l.id,
+                  label: l.name,
+                  colour: l.color,
+                }))}
+                selected={labelIds}
+                onToggle={toggleLabel}
+                empty="No labels yet. Create your first one below."
+              />
+              {/* COLLABORATORs can't touch workspace-scoped taxonomy. Everyone
+                  else (OWNER/ADMIN/MEMBER) can create-and-assign inline. */}
+              <CreateLabelPopover
+                workspaceSlug={workspaceSlug}
+                onCreated={(label) => assignNewLabel(label.id)}
+                disabled={workspaceRole === 'COLLABORATOR'}
+              />
+            </div>
           </FieldRow>
 
           {/* Reporter — read-only */}
