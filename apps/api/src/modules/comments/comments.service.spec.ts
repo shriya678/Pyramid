@@ -5,6 +5,7 @@ import { BadRequestException, ForbiddenException, NotFoundException } from '@nes
 import { ActivityType, Role } from '@prisma/client';
 import type { PrismaService } from '../../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
+import type { NotificationsService } from '../notifications/notifications.service';
 import type { ProjectAccessService } from '../projects/project-access.service';
 import type { WorkspaceContext } from '../workspaces/guards/workspace-member.guard';
 import { CommentsService } from './comments.service';
@@ -15,6 +16,12 @@ const noopAccess = {
   assertCanAccessProject: async () => undefined,
   assertCanAccessTask: async () => undefined,
 } as unknown as ProjectAccessService;
+
+/** No-op stub. Notification emission is covered in notifications.service.spec.ts;
+ *  here we just satisfy DI so create() doesn't crash. */
+const noopNotifications = {
+  emitMentions: async () => undefined,
+} as unknown as NotificationsService;
 
 interface CommentRow {
   id: string;
@@ -172,6 +179,7 @@ describe('CommentsService', () => {
       prisma as unknown as PrismaService,
       new ActivityService(prisma as unknown as PrismaService),
       noopAccess,
+      noopNotifications,
     );
     prisma.__seedTask({ id: 't-1', workspaceId: 'ws-1' });
     prisma.__seedTask({ id: 't-other', workspaceId: 'ws-other' });

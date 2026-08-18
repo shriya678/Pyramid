@@ -15,6 +15,7 @@ import { DebugModule } from './modules/debug/debug.module';
 import { ActivityModule } from './modules/activity/activity.module';
 import { CommentsModule } from './modules/comments/comments.module';
 import { LabelsModule } from './modules/labels/labels.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
 import { PreferencesModule } from './modules/preferences/preferences.module';
 import { ProjectsModule } from './modules/projects/projects.module';
 import { ResourcesModule } from './modules/resources/resources.module';
@@ -48,6 +49,7 @@ const isProd = process.env.NODE_ENV === 'production';
     CommentsModule,
     ResourcesModule,
     ActivityModule,
+    NotificationsModule,
     PreferencesModule,
     HealthModule,
     // Debug endpoints are dev-only. Excluded from the production bundle at runtime.
