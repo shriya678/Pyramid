@@ -75,18 +75,24 @@ export class CommentsService {
   ) {}
 
   /**
-   * List all comments on a task, grouped for rendering: top-level comments in
-   * chronological order, each with its replies nested (also chronological).
+   * List all comments on a task, grouped for rendering: top-level comments
+   * newest-first (matches chat-app conventions — the latest activity is what
+   * the user cares about), each with its replies nested in chronological
+   * order within the thread (older-first inside a thread reads more naturally
+   * as a conversation).
    */
   async listForTask(ctx: WorkspaceContext, taskId: string): Promise<ThreadedCommentResponse[]> {
     await this.requireTaskInWorkspace(ctx, taskId);
+    // Fetch all rows in a single query, ordered ascending — cheap to
+    // reverse just the top-level slice in memory and keep the reply
+    // buckets already in chronological order.
     const rows = await this.prisma.comment.findMany({
       where: { taskId },
       orderBy: { createdAt: 'asc' },
       include: { author: { select: AUTHOR_SELECT } },
     });
 
-    const topLevel = rows.filter((r) => r.parentCommentId === null);
+    const topLevelAsc = rows.filter((r) => r.parentCommentId === null);
     const repliesByParent = new Map<string, CommentWithAuthor[]>();
     for (const r of rows) {
       if (r.parentCommentId) {
@@ -95,10 +101,15 @@ export class CommentsService {
         repliesByParent.set(r.parentCommentId, list);
       }
     }
-    return topLevel.map((t) => ({
-      ...toResponse(t),
-      replies: (repliesByParent.get(t.id) ?? []).map(toResponse),
-    }));
+    // Top-level: newest → oldest. Replies within each thread: oldest →
+    // newest (already ordered that way by the findMany above).
+    return topLevelAsc
+      .slice()
+      .reverse()
+      .map((t) => ({
+        ...toResponse(t),
+        replies: (repliesByParent.get(t.id) ?? []).map(toResponse),
+      }));
   }
 
   async create(
