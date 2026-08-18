@@ -13,9 +13,8 @@ import {
   useUpdateComment,
 } from '@/lib/hooks/use-board-data';
 import { useAuthStore } from '@/lib/stores/auth-store';
-import { docOfPlainText, docToPlainText } from '@/lib/prosemirror-doc';
+import { RichTextViewer } from '@/components/rich-text/rich-text-viewer';
 import { CommentComposer } from './comment-composer';
-import { MentionText } from './mention-text';
 
 export interface CommentsPanelProps {
   workspaceSlug: string;
@@ -27,7 +26,7 @@ export interface CommentsPanelProps {
 /**
  * Threaded comments for a task. Top-level composer at the top; below it a
  * list of top-level comments each with (up to one level of) nested replies.
- * @username tokens in bodies render highlighted via MentionText.
+ * Bodies are ProseMirror docs; RichTextViewer renders them read-only.
  *
  * Edit is author-only (server enforces); delete is author OR OWNER/ADMIN
  * (moderator). Both actions live in a small row that appears on hover of
@@ -48,7 +47,7 @@ export function CommentsPanel({ workspaceSlug, taskId, workspaceRole }: Comments
       </header>
 
       <CommentComposer
-        onSubmit={(body) => create.mutate({ body: docOfPlainText(body) })}
+        onSubmit={(doc) => create.mutate({ body: doc })}
         isSubmitting={create.isPending}
         submitLabel="Comment"
         placeholder="Write a comment… @ to mention a teammate"
@@ -124,9 +123,9 @@ function CommentThread({
             <li>
               <CommentComposer
                 autoFocus
-                onSubmit={(body) => {
+                onSubmit={(doc) => {
                   create.mutate(
-                    { body: docOfPlainText(body), parentCommentId: comment.id },
+                    { body: doc, parentCommentId: comment.id },
                     { onSuccess: () => setReplying(false) },
                   );
                 }}
@@ -190,10 +189,10 @@ function CommentRow({
         {editing ? (
           <CommentComposer
             autoFocus
-            initialBody={docToPlainText(comment.body)}
-            onSubmit={(body) => {
+            initialDoc={comment.body}
+            onSubmit={(doc) => {
               update.mutate(
-                { commentId: comment.id, body: docOfPlainText(body) },
+                { commentId: comment.id, body: doc },
                 { onSuccess: () => setEditing(false) },
               );
             }}
@@ -204,9 +203,7 @@ function CommentRow({
             workspaceSlug={workspaceSlug}
           />
         ) : (
-          <p className="whitespace-pre-wrap text-sm">
-            <MentionText body={docToPlainText(comment.body)} />
-          </p>
+          <RichTextViewer doc={comment.body} className="text-sm" />
         )}
 
         {!editing ? (
