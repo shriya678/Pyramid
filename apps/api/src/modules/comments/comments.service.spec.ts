@@ -206,7 +206,7 @@ describe('CommentsService', () => {
   // listForTask
   // ---------------------------------------------------------------------------
   describe('listForTask', () => {
-    it('returns top-level comments with replies nested', async () => {
+    it('returns top-level comments newest-first with replies nested chronologically', async () => {
       prisma.__seed(makeComment({ id: 'c-a', taskId: 't-1', body: docOf('top A') }));
       prisma.__seed(
         makeComment({ id: 'c-a-r1', taskId: 't-1', parentCommentId: 'c-a', body: docOf('reply') }),
@@ -214,9 +214,12 @@ describe('CommentsService', () => {
       prisma.__seed(makeComment({ id: 'c-b', taskId: 't-1', body: docOf('top B') }));
 
       const list = await service.listForTask(ws1, 't-1');
-      expect(list.map((c) => c.id)).toEqual(['c-a', 'c-b']);
-      expect(list[0].replies.map((r) => r.id)).toEqual(['c-a-r1']);
-      expect(list[1].replies).toEqual([]);
+      // Top-level: newest → oldest. Seeded a-then-b, so b appears first.
+      expect(list.map((c) => c.id)).toEqual(['c-b', 'c-a']);
+      // Replies stay in insertion order within their thread (a's reply
+      // still on a, chronological within the sub-list).
+      expect(list[0].replies).toEqual([]);
+      expect(list[1].replies.map((r) => r.id)).toEqual(['c-a-r1']);
     });
 
     it('cross-workspace task → 404', async () => {

@@ -153,7 +153,17 @@ export class NotificationsService {
     // detection produced by the TipTap Mention extension.
     const plainText = extractPlainText(args.body);
     const usernames = extractMentionedUsernames(plainText);
-    if (usernames.length === 0) return;
+    if (usernames.length === 0) {
+      // Only log when the body actually contains an @ — otherwise every
+      // comment ever generates noise. Helps QA answer "why didn't my
+      // mention fire" quickly.
+      if (plainText.includes('@')) {
+        this.logger.log(
+          `emitMentions: no @username tokens matched for comment ${args.commentId} (plainText=${JSON.stringify(plainText.slice(0, 200))})`,
+        );
+      }
+      return;
+    }
 
     // Look up matching workspace members. Filter server-side so we don't
     // notify users outside the workspace even if they happen to share the
@@ -169,7 +179,15 @@ export class NotificationsService {
       },
       select: { userId: true, user: { select: { username: true } } },
     });
-    if (members.length === 0) return;
+    if (members.length === 0) {
+      // Common cause: the mentioned username doesn't exist in this
+      // workspace, OR it belongs to a seeded fake teammate (filtered
+      // out because they can't log in to read the notification).
+      this.logger.log(
+        `emitMentions: parsed @usernames=[${usernames.join(', ')}] but no real workspace members matched for comment ${args.commentId}`,
+      );
+      return;
+    }
 
     await tx.notification.createMany({
       data: members.map((m) => ({
@@ -181,7 +199,7 @@ export class NotificationsService {
       })),
     });
     this.logger.log(
-      `Emitted ${members.length} MENTION notification(s) for comment ${args.commentId}`,
+      `emitMentions: delivered ${members.length} MENTION notification(s) for comment ${args.commentId} to [${members.map((m) => m.user.username).join(', ')}]`,
     );
   }
 }
