@@ -42,6 +42,7 @@ import {
   type CreateStatusInput,
   type UpdateStatusInput,
 } from '../api/statuses';
+import type { ProseMirrorDoc } from '../prosemirror-doc';
 import type { ProjectResponse, StatusResponse, TaskResponse } from '../api/types';
 import {
   createTask,
@@ -428,7 +429,7 @@ export function useCreateComment(slug: string, taskId: string) {
 export function useUpdateComment(slug: string, taskId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ commentId, body }: { commentId: string; body: string }) =>
+    mutationFn: ({ commentId, body }: { commentId: string; body: ProseMirrorDoc }) =>
       updateComment(slug, taskId, commentId, body),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: boardKeys.comments(slug, taskId) });

@@ -120,7 +120,8 @@ export interface CommentAuthorMini {
 export interface CommentResponse {
   id: string;
   taskId: string;
-  body: string;
+  /** ProseMirror JSON document. See `lib/prosemirror-doc.ts` for helpers. */
+  body: import('../prosemirror-doc').ProseMirrorDoc;
   author: CommentAuthorMini;
   parentCommentId: string | null;
   createdAt: string;
