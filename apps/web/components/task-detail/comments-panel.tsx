@@ -50,7 +50,8 @@ export function CommentsPanel({ workspaceSlug, taskId, workspaceRole }: Comments
         onSubmit={(body) => create.mutate({ body })}
         isSubmitting={create.isPending}
         submitLabel="Comment"
-        placeholder="Write a comment… use @name to mention"
+        placeholder="Write a comment… @ to mention a teammate"
+        workspaceSlug={workspaceSlug}
       />
 
       {comments.isLoading ? (
@@ -131,7 +132,8 @@ function CommentThread({
                 onCancel={() => setReplying(false)}
                 isSubmitting={create.isPending}
                 submitLabel="Reply"
-                placeholder="Write a reply…"
+                placeholder="Write a reply… @ to mention a teammate"
+                workspaceSlug={workspaceSlug}
               />
             </li>
           ) : null}
@@ -198,6 +200,7 @@ function CommentRow({
             isSubmitting={update.isPending}
             submitLabel="Save"
             placeholder="Edit your comment…"
+            workspaceSlug={workspaceSlug}
           />
         ) : (
           <p className="whitespace-pre-wrap text-sm">
