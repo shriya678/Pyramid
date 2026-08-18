@@ -278,7 +278,11 @@ model Comment {
   task            Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
   authorId        String
   author          User      @relation("CommentAuthor", fields: [authorId], references: [id])
-  body            String
+  /// ProseMirror JSON document produced by the TipTap-based rich text
+  /// composer. Shape: `{ type: 'doc', content: [ ... ] }`. Legacy
+  /// plain-text comments were migrated to a single-paragraph doc during
+  /// the `add_rich_text_comment_body` migration.
+  body            Json
   parentCommentId String?
   parentComment   Comment?  @relation("CommentReplies", fields: [parentCommentId], references: [id], onDelete: Cascade)
   replies         Comment[] @relation("CommentReplies")
