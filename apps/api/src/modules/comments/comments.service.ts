@@ -7,6 +7,7 @@ import {
 import { ActivityType, Role, type Comment, type User } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { ProjectAccessService } from '../projects/project-access.service';
 import type { WorkspaceContext } from '../workspaces/guards/workspace-member.guard';
 import type { CreateCommentDto } from './dto/create-comment.dto';
@@ -61,6 +62,7 @@ export class CommentsService {
     private readonly prisma: PrismaService,
     private readonly activity: ActivityService,
     private readonly access: ProjectAccessService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -116,6 +118,16 @@ export class CommentsService {
         actorId,
         type: ActivityType.COMMENT_ADDED,
         payload: { commentId: c.id, isReply: c.parentCommentId !== null },
+      });
+      // Emit MENTION notifications inside the same transaction — if the
+      // comment insert or the activity append fails, we don't want stale
+      // notifications pointing at a comment that never existed.
+      await this.notifications.emitMentions(tx, {
+        actorId,
+        workspaceId: ctx.id,
+        taskId,
+        commentId: c.id,
+        body: c.body,
       });
       return c;
     });
