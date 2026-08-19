@@ -2321,6 +2321,45 @@
           ]
         },
         {
+          "name": "POST /sign-inline-image (public upload for comment paste)",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/workspaces/{{workspaceSlug}}/tasks/{{resourcesTaskId}}/resources/sign-inline-image",
+              "host": ["{{baseUrl}}"],
+              "path": [
+                "workspaces",
+                "{{workspaceSlug}}",
+                "tasks",
+                "{{resourcesTaskId}}",
+                "resources",
+                "sign-inline-image"
+              ]
+            },
+            "description": "Public-mode Cloudinary sign for inline images pasted / dropped / picked in the rich text comment editor. Returned URL is embedded in the ProseMirror doc as an <img src> and needs to work forever without server-side re-signing. Same 20/min throttle as sign-upload."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('200 OK', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('returns public-mode sign params', () => {",
+                  "  pm.expect(b).to.include.keys('cloudName', 'apiKey', 'timestamp', 'signature', 'folder', 'uploadUrl');",
+                  "  pm.expect(b.type).to.eql('upload');",
+                  "  pm.expect(b.resourceType).to.eql('image');",
+                  "  pm.expect(b.folder).to.match(/inline-images\\/tasks\\/[a-z0-9]+/);",
+                  "  pm.expect(b.uploadUrl).to.match(/\\/image\\/upload$/);",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
           "name": "POST create FILE (with synthetic cloudinaryKey)",
           "request": {
             "method": "POST",

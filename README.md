@@ -16,10 +16,11 @@ Built as a technical assessment for a Full Stack Developer role.
 
 1. Open the live web URL.
 2. Click **Continue as Guest** — a fresh workspace is provisioned with 4 default statuses, 4 seeded teammates, 1 demo project, and 6 demo tasks.
-3. Drag a card between columns. Click one to open its detail modal. Try inline-edit on the title. Add a comment. Upload a small image. Add a subtask.
-4. Click the workspace name (sidebar, top left) → **+ Create workspace** → "Marketing 2026" → lands in a clean workspace with no fixtures.
-5. Switch back to your original workspace via the same dropdown.
-6. **Settings** (from the same dropdown) → try Profile edit, Workspace Members, Statuses management, Leave workspace.
+3. Drag a card between columns. Click one to open its detail modal. Try inline-edit on the title. Add a subtask.
+4. **Rich text comments** — in the composer, use the toolbar (bold/lists/code/etc), type `@` for a member picker, or **paste a screenshot** to upload it inline (click it to resize).
+5. Click the workspace name (sidebar, top left) → **+ Create workspace** → "Marketing 2026" → lands in a clean workspace with no fixtures.
+6. Switch back to your original workspace via the same dropdown.
+7. **Settings** (from the same dropdown) → try Profile edit, Workspace Members, Statuses management, Leave workspace.
 
 ---
 
@@ -41,13 +42,16 @@ Built as a technical assessment for a Full Stack Developer role.
 
 ### Task detail
 
-- Inline-edit title, description (react-markdown render), priority, dates, assignee, labels.
-- **Threaded comments** — one level of reply, `@username` highlight-only mentions.
+- Inline-edit title, description (react-markdown render), priority, dates, assignee, labels. **Inline "+ New label"** popover creates and auto-assigns in one gesture.
+- **Threaded comments** with a TipTap-based **rich text editor** — bold / italic / strike / inline code / headings / bullet + ordered lists / blockquote / code block via a toolbar; keyboard shortcuts too (Cmd+B, `- ` prefix for lists, ``` for code block, etc). One level of reply. Bodies stored as ProseMirror JSON (`Comment.body: Json`).
+- **@mention typeahead** — type `@` → filtered dropdown of workspace members → pick → inserts a `type: 'mention'` node with the userId baked in. Backend delivers notifications by userId (no regex fuzzy match); also keeps a regex fallback for manually-typed `@username`.
+- **Notification bell** in the top bar — 30s polling for unread count, popover with recent MENTION notifications, click a row to jump to the mentioned task.
+- **Image paste + drop + upload** in comments — screenshots or dragged files upload direct to Cloudinary (`type=upload`, public URL), insert as image nodes with a **resize toolbar** (25/50/75/100% width presets).
 - **Activity feed** — server-side transactional writes for create / status / priority / date / member / label / comment / resource events.
-- **Resources** — paste-a-link (LINK type) and file upload (FILE type) via signed Cloudinary uploads (`type=authenticated`) with 5-min signed read URLs.
+- **Resources** — paste-a-link (LINK type) and file upload (FILE type) via signed Cloudinary uploads (`type=authenticated`) with 5-min signed read URLs. Distinct from inline comment images (public) — sensitive files use this path.
 - **Subtasks** — one level deep via `parentTaskId`.
 - **Details panel** on the right — status, priority, members, dates, labels, reporter; all inline-editable with optimistic updates.
-- **Modal + full-page routes** — parallel/intercepted routes: card click opens as modal over the board; direct URL entry lands on the full-page view; an expand icon jumps between the two.
+- **Modal + full-page routes** — parallel/intercepted routes: card click opens as modal over the board; direct URL entry lands on the full-page view; an expand icon jumps between the two (opens in a new tab so board context stays).
 
 ### Projects
 
@@ -73,7 +77,12 @@ Built as a technical assessment for a Full Stack Developer role.
 - **Workspace Members** panel (see above).
 - **Custom statuses** — add / rename / recolor / reorder / delete with move-to. Sole-status delete blocked with 409.
 - **Leave workspace** — destructive-styled section; sole-owner blocked with inline reason.
+- **Delete workspace** — OWNER-only, requires typing the workspace name to confirm; cascades via Prisma `onDelete: Cascade`.
 - **Theme (light/dark/system)** and **accent color (6 presets)** via the sidebar user menu; both persist to localStorage and sync to `UserPreference` server-side.
+
+### Auth extras
+
+- **Guest → Google upgrade** — signed-in guests can attach a Google account in place from the workspace user menu (same user id, same workspace, same tasks). Merge intent flows through OAuth via a signed JWT `state` param — no server-side state store. Blocked if the target Google account already belongs to another user.
 
 ### Infra & observability
 
@@ -85,13 +94,13 @@ Built as a technical assessment for a Full Stack Developer role.
 
 ## Stack
 
-| Layer        | Choice                                                                                                                                                                       |
-| ------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Frontend** | Next.js 16 (App Router, Turbopack) · React 19 · Tailwind CSS 4 · shadcn/ui + Base UI · TanStack Query · Zustand · next-themes · @dnd-kit · react-day-picker · react-markdown |
-| **Backend**  | NestJS 11 · Prisma 5 · PostgreSQL 16 · class-validator · @nestjs/passport (JWT + Google) · @nestjs/throttler · helmet · pino · Jest                                          |
-| **Shared**   | `packages/shared` — enums + zod schemas + TS types                                                                                                                           |
-| **Infra**    | Vercel · Render · Neon · Cloudinary · Sentry · GitHub Actions                                                                                                                |
-| **Monorepo** | pnpm workspaces — `apps/web`, `apps/api`, `packages/shared`                                                                                                                  |
+| Layer        | Choice                                                                                                                                                                                                                     |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Frontend** | Next.js 16 (App Router, Turbopack) · React 19 · Tailwind CSS 4 · shadcn/ui + Base UI · TanStack Query · Zustand · next-themes · @dnd-kit · react-day-picker · TipTap 3 (StarterKit + Link + Mention + Image + Placeholder) |
+| **Backend**  | NestJS 11 · Prisma 5 · PostgreSQL 16 · class-validator · @nestjs/passport (JWT + Google) · @nestjs/throttler · helmet · pino · Jest                                                                                        |
+| **Shared**   | `packages/shared` — enums + zod schemas + TS types                                                                                                                                                                         |
+| **Infra**    | Vercel · Render · Neon · Cloudinary · Sentry · GitHub Actions                                                                                                                                                              |
+| **Monorepo** | pnpm workspaces — `apps/web`, `apps/api`, `packages/shared`                                                                                                                                                                |
 
 ---
 
@@ -219,12 +228,9 @@ Full descriptions in `apps/api/.env.example` and `apps/web/.env.example`. Highli
 
 Called out honestly since the assessment weighs "attention to detail" and "product thinking":
 
-- **Teams field on Task Detail** — rendered as disabled. A full Team + TeamMember + TaskTeam model with management UI didn't fit the timeline; the four-role access model was the more product-load-bearing decision.
-- **Live presence avatars** on the board (floating "D"/"A" badges) — rendered as **static seeded members**. No WebSockets in v1.
+- **Teams field on Task Detail** — rendered as disabled. A full Team + TeamMember + TaskTeam model with management UI wasn't a good use of the scope budget; the four-role access model was the more product-load-bearing decision.
+- **Live presence avatars** on the board (floating "D"/"A" badges) — rendered as **static seeded members**. WebSocket presence adds a whole realtime layer for cosmetic value in a v1.
 - **Project detail header** — Figma jumps straight to the task list; we added a compact editable header (name, priority, lead, due, edit) since otherwise projects have no post-creation edit UI.
-- **@mentions** — parsed and highlighted in comments, but **no notification delivery**. Bell icon + Notification rows are P2 and dropped.
-- **Guest → Google merge** — deferred; guest signing in with Google today produces a separate Google account. The merge flow requires OAuth state-param plumbing that didn't fit the deadline.
-- **Delete workspace** — sole-owner leave is blocked with an inline note pointing at "delete workspace instead", but the delete endpoint + confirm flow itself is a follow-up.
 
 ---
 
@@ -242,12 +248,13 @@ Called out honestly since the assessment weighs "attention to detail" and "produ
 
 Roughly in priority order:
 
-1. **Delete-workspace endpoint + confirm dialog** — closes the loop opened by the sole-owner-leave block.
-2. **Guest → Google merge** — OAuth state-param carries the guest JWT through the callback; server converts the guest user in place when the Google account is new.
-3. **@mention notifications** — bell icon, unread count, poll-based (no realtime); Notification rows already have a schema.
-4. **Live presence** on the Board — WebSocket gateway on the API; replaces the seeded static avatars.
+1. **Text color picker + slash-command menu** in the rich text editor — text color needs `@tiptap/extension-color`; slash menu is a discoverability tool (users already reach every block via the toolbar, so this is polish, not a gap).
+2. **Native image drag-handles** — resize is currently a preset picker (25/50/75/100%). Free-drag handles inside contenteditable are non-trivial engineering (they fight ProseMirror's selection model), but nice polish.
+3. **Live presence** on the Board — WebSocket gateway on the API; replaces the seeded static avatars.
+4. **Teams model** for the disabled Teams field — Team + TeamMember + TaskTeam + management UI, wired into the assignee picker as a group affordance.
 5. **Project drag-to-reorder** — `Project.orderIndex` column is already in the schema.
 6. **Shared types package** — currently `apps/web/lib/api/types.ts` mirrors backend DTOs by hand. Publishing them via `packages/shared` would remove the drift risk.
+7. **Cloudinary asset cleanup cron** — comment images and file attachments currently orphan on the CDN if their DB row is deleted. Nightly reconcile job would close the loop.
 
 ---
 
