@@ -1,0 +1,46 @@
+name: Keep Render warm
+
+# Render's free tier idles a web service after ~15 minutes of no traffic;
+# waking it costs a ~30-60s cold start on the next request. That's a bad
+# first impression when a reviewer opens the live app.
+#
+# Poll /health every 10 minutes so the service never idles long enough
+# to sleep. Also fails the workflow run if the endpoint doesn't respond
+# with 200 — a red history in the Actions tab is a cheap uptime signal.
+#
+# GitHub cron schedules are best-effort (delays of 5-10 minutes under
+# load are documented) and pause after 60 days of repo inactivity. At
+# 10-minute cadence, a slipped tick still lands well inside Render's
+# 15-minute idle window.
+
+on:
+  schedule:
+    # Every 10 minutes. 5 minutes is the minimum GitHub allows.
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+concurrency:
+  # If a previous run is still going for whatever reason, don't stack —
+  # the freshest ping is what matters.
+  group: keep-warm
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    name: GET /health
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: Curl health endpoint
+        run: |
+          set -euo pipefail
+          URL="https://pyramid-sb7m.onrender.com/health"
+          echo "Pinging $URL"
+          # -sS: quiet but show errors. -f: fail on HTTP >=400.
+          # --max-time 90: cold start can take up to a minute; leave headroom.
+          # Print the response body for the run log so we can see status/db/uptime.
+          curl -sSf --max-time 90 "$URL" | tee /tmp/health.json
+          echo
+          # One-liner sanity check the JSON shape looks right.
+          node -e "const j = require('/tmp/health.json'); if (j.status !== 'ok' || j.db !== 'up') { console.error('unhealthy', j); process.exit(1); }"
