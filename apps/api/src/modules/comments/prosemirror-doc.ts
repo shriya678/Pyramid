@@ -109,6 +109,35 @@ export function extractPlainText(doc: ProseMirrorDoc | ProseMirrorNode): string 
 }
 
 /**
+ * Walk a doc and collect the userIds of every `type: 'mention'` node.
+ * TipTap's Mention extension stores the userId in `attrs.id` (and the
+ * display username in `attrs.label`); reading `id` directly avoids the
+ * whole regex-vs-plain-text guessing game the old parser had to do.
+ *
+ * Returns unique userIds in order of appearance. Duplicates within a
+ * single comment collapse to one entry so mentioning someone three
+ * times doesn't send them three notifications.
+ */
+export function extractMentionedUserIds(doc: ProseMirrorDoc): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  const walk = (node: ProseMirrorNode | ProseMirrorDoc) => {
+    if (node.type === 'mention') {
+      const id = node.attrs?.['id'];
+      if (typeof id === 'string' && !seen.has(id)) {
+        seen.add(id);
+        out.push(id);
+      }
+    }
+    if ('content' in node && Array.isArray(node.content)) {
+      for (const child of node.content) walk(child);
+    }
+  };
+  walk(doc);
+  return out;
+}
+
+/**
  * Truncate an extracted plain-text preview to `max` chars with an ellipsis.
  * Used by notification previews so a 5000-char rich comment doesn't spill
  * the whole bell popover.

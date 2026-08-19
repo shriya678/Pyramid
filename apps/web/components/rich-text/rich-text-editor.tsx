@@ -6,6 +6,7 @@ import { cn } from '@/lib/utils';
 import type { ProseMirrorDoc } from '@/lib/prosemirror-doc';
 import { richTextExtensions } from './rich-text-extensions';
 import { RichTextToolbar } from './rich-text-toolbar';
+import { useMentionSuggestion } from './use-mention-suggestion';
 
 export interface RichTextEditorHandle {
   /** Programmatically clear the editor (used after a successful submit). */
@@ -40,6 +41,12 @@ export interface RichTextEditorProps {
    * viewer (which shares this component) doesn't get toolbar chrome.
    */
   showToolbar?: boolean;
+  /**
+   * Enables the @-typeahead mention picker. When set, typing `@` opens a
+   * filtered dropdown of workspace members; picking one inserts a
+   * `type: 'mention'` node the backend can deliver notifications for.
+   */
+  workspaceSlug?: string;
   className?: string;
 }
 
@@ -62,10 +69,18 @@ export function RichTextEditor({
   editable = true,
   handleRef,
   showToolbar = false,
+  workspaceSlug,
   className,
 }: RichTextEditorProps) {
+  // The suggestion pipeline is only wired when workspaceSlug is provided
+  // (composer usage). Viewer/read-only usage passes nothing so no
+  // members request fires.
+  const mentionSuggestion = useMentionSuggestion(workspaceSlug ?? '');
   const editor = useEditor({
-    extensions: richTextExtensions(placeholder),
+    extensions: richTextExtensions({
+      placeholder,
+      mentionSuggestion: workspaceSlug ? mentionSuggestion : undefined,
+    }),
     content: initialDoc ?? undefined,
     autofocus: autoFocus ? 'end' : false,
     editable,

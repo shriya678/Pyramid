@@ -34,6 +34,9 @@ export function RichTextViewer({ doc, className }: RichTextViewerProps) {
   const stableDoc = useMemo(() => doc, [doc]);
 
   const editor = useEditor({
+    // No mention suggestion pipeline needed — the viewer just needs the
+    // Mention node schema so `type: 'mention'` nodes in stored docs
+    // render correctly. richTextExtensions() always registers it.
     extensions: richTextExtensions(),
     content: stableDoc,
     editable: false,

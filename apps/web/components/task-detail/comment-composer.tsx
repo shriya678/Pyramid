@@ -21,10 +21,12 @@ export interface CommentComposerProps {
    *  should key it on comment id to reset state when switching targets. */
   initialDoc?: ProseMirrorDoc | null;
   /**
-   * Reserved for the phase-7 TipTap Mention extension. Currently unused —
-   * kept in the API so callers don't need to change again when mention
-   * autocomplete lands. Users can still type `@username` manually; the
-   * backend parses and delivers.
+   * Enables the @-typeahead mention picker (via TipTap Mention extension).
+   * When set, typing `@` opens a filtered dropdown of workspace members;
+   * picking one inserts a `type: 'mention'` node the backend delivers
+   * notifications for. Without this, the editor still lets users type
+   * `@username` manually as plain text (backend regex still catches it
+   * as an interim, but no autocomplete UX).
    */
   workspaceSlug?: string;
 }
@@ -47,7 +49,7 @@ export function CommentComposer({
   onCancel,
   autoFocus,
   initialDoc,
-  workspaceSlug: _workspaceSlug,
+  workspaceSlug,
 }: CommentComposerProps) {
   const handleRef = useRef<RichTextEditorHandle | null>(null);
   // Tracks whether the editor currently has any typed content — drives
@@ -78,6 +80,7 @@ export function CommentComposer({
         placeholder={placeholder}
         autoFocus={autoFocus}
         showToolbar
+        workspaceSlug={workspaceSlug}
         className={cn(
           'overflow-hidden rounded-md border bg-transparent text-sm',
           'focus-within:ring-2 focus-within:ring-ring',
