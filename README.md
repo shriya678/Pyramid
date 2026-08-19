@@ -117,7 +117,7 @@ Two invite gestures, four workspace roles.
 
 The `COLLABORATOR` tier is the "external contractor" case — added implicitly when you project-invite someone who isn't in the workspace yet. Never downgraded from a MEMBER/ADMIN. Every read + write scopes through `ProjectAccessService` and returns **404 on denial** (not 403) so we don't leak existence of projects the caller can't see.
 
-Full walkthrough with three test accounts in [`docs/PLAN.md`](./docs/PLAN.md#members-demo-path-three-account-flow-showcases-both-invite-gestures).
+Three-account walkthrough: sign in as Priya (OWNER), Sam (invited as MEMBER, sees every project), and Alex (project-invited to Site Redesign only, sees just that project — probing another project's URL returns 404, not 403).
 
 ---
 
@@ -139,9 +139,7 @@ Task_Management_system/
 ├── packages/
 │   └── shared/         # enums + zod schemas
 ├── docs/
-│   ├── PLAN.md         # 14-day plan; final state noted at the bottom
-│   ├── REQUIREMENTS.md # feature checklist from Figma with tier + PR link
-│   ├── DEPLOY.md       # step-by-step provisioning for every managed service
+│   ├── REQUIREMENTS.md # SRS-style: functional + non-functional requirements
 │   ├── architecture.md # system diagram + auth sequences + file upload flow
 │   ├── erd.md          # data model with Mermaid ER diagram
 │   └── postman/task-mgmt.postman_collection.json
@@ -181,7 +179,7 @@ pnpm dev
 
 Web on http://localhost:3000, API on http://localhost:4000, Swagger on http://localhost:4000/api/docs.
 
-Guest login works out of the box. Google login needs `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_CALLBACK_URL` in `apps/api/.env`; without them the `/auth/google` route 500s but the rest of the app is unaffected. See [`docs/DEPLOY.md`](./docs/DEPLOY.md) for how to provision Google OAuth credentials.
+Guest login works out of the box. Google login needs `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_CALLBACK_URL` in `apps/api/.env`; without them the `/auth/google` route 500s but the rest of the app is unaffected.
 
 ### Postgres port on Windows
 
@@ -215,11 +213,9 @@ Full descriptions in `apps/api/.env.example` and `apps/web/.env.example`. Highli
 
 ## Docs
 
-- **[docs/PLAN.md](./docs/PLAN.md)** — the 14-day plan, tier assignments (P0/P1/P2), full data model, security posture, three-account demo path, and a final-state summary at the bottom of what shipped vs. what was deliberately deferred.
-- **[docs/REQUIREMENTS.md](./docs/REQUIREMENTS.md)** — the requirements scorecard derived from the Figma design, one testable statement per row.
+- **[docs/REQUIREMENTS.md](./docs/REQUIREMENTS.md)** — SRS-style specification: introduction, user classes, functional requirements (FR-x.y grouped by feature area), non-functional requirements (security, performance, accessibility, responsiveness, observability), constraints, assumptions, out-of-scope.
 - **[docs/erd.md](./docs/erd.md)** — data model with Mermaid ER diagram and per-entity notes.
 - **[docs/architecture.md](./docs/architecture.md)** — system diagram, auth sequence diagrams, Cloudinary upload flow.
-- **[docs/DEPLOY.md](./docs/DEPLOY.md)** — step-by-step provisioning for Neon, Cloudinary, Sentry, Render, Vercel, and Google Cloud.
 - **Swagger** — [`{api}/api/docs`](https://pyramid-sb7m.onrender.com/api/docs) — every endpoint auto-documented with request/response schemas.
 
 ---
