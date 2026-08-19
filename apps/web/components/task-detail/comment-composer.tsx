@@ -1,9 +1,10 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import type { ProseMirrorDoc } from '@/lib/prosemirror-doc';
+import { uploadInlineImage } from '@/lib/api/resources';
 import { RichTextEditor, type RichTextEditorHandle } from '@/components/rich-text/rich-text-editor';
 
 export interface CommentComposerProps {
@@ -29,6 +30,13 @@ export interface CommentComposerProps {
    * as an interim, but no autocomplete UX).
    */
   workspaceSlug?: string;
+  /**
+   * Enables inline image paste / drop / toolbar picker. Required together
+   * with workspaceSlug — the upload flow signs a per-task upload URL, so
+   * we need both to be in scope. Without taskId, the image affordances
+   * are hidden and paste of an image blob does nothing.
+   */
+  taskId?: string;
 }
 
 /**
@@ -50,8 +58,26 @@ export function CommentComposer({
   autoFocus,
   initialDoc,
   workspaceSlug,
+  taskId,
 }: CommentComposerProps) {
   const handleRef = useRef<RichTextEditorHandle | null>(null);
+
+  /**
+   * Cloudinary sign+upload wrapper. Enabled only when both workspaceSlug
+   * and taskId are set (sign endpoint is task-scoped). RichTextEditor
+   * calls this from its paste + drop hooks; the toolbar's image button
+   * calls it via a file-picker.
+   */
+  const uploadImage = useCallback(
+    async (file: File | Blob): Promise<{ url: string; width?: number }> => {
+      if (!workspaceSlug || !taskId) {
+        throw new Error('workspaceSlug + taskId required for inline image upload');
+      }
+      const res = await uploadInlineImage(workspaceSlug, taskId, file);
+      return { url: res.url, width: res.width };
+    },
+    [workspaceSlug, taskId],
+  );
   // Tracks whether the editor currently has any typed content — drives
   // the Submit button disabled state without forcing a re-render on
   // every keystroke via a full doc-in-state pattern.
@@ -81,6 +107,7 @@ export function CommentComposer({
         autoFocus={autoFocus}
         showToolbar
         workspaceSlug={workspaceSlug}
+        onImageUpload={workspaceSlug && taskId ? uploadImage : undefined}
         className={cn(
           'overflow-hidden rounded-md border bg-transparent text-sm',
           'focus-within:ring-2 focus-within:ring-ring',

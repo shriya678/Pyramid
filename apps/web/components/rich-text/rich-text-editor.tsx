@@ -47,6 +47,17 @@ export interface RichTextEditorProps {
    * `type: 'mention'` node the backend can deliver notifications for.
    */
   workspaceSlug?: string;
+  /**
+   * Handler for image paste/drop. Receives the image blob, uploads it,
+   * returns a URL to embed. Called from the editor's own paste + drop
+   * hooks so the composer (which owns workspaceSlug + taskId) can do
+   * the actual Cloudinary sign+upload.
+   *
+   * If undefined, paste/drop of images does nothing extra — bare
+   * clipboard behavior applies (usually inserts nothing for image
+   * blobs since they aren't valid HTML/text).
+   */
+  onImageUpload?: (file: File | Blob) => Promise<{ url: string; width?: number }>;
   className?: string;
 }
 
@@ -70,6 +81,7 @@ export function RichTextEditor({
   handleRef,
   showToolbar = false,
   workspaceSlug,
+  onImageUpload,
   className,
 }: RichTextEditorProps) {
   // The suggestion pipeline is only wired when workspaceSlug is provided
@@ -111,6 +123,26 @@ export function RichTextEditor({
           return true;
         }
         return false;
+      },
+      handlePaste: (view, event) => {
+        // Intercept clipboard images (screenshots, copied images from other
+        // apps). Text/HTML paste falls through to ProseMirror's default.
+        if (!onImageUpload) return false;
+        const files = extractImageFiles(event.clipboardData);
+        if (files.length === 0) return false;
+        event.preventDefault();
+        void uploadAndInsert(view, files, onImageUpload);
+        return true;
+      },
+      handleDrop: (view, event, _slice, moved) => {
+        // moved=true means it's a ProseMirror-internal drag (e.g. moving a
+        // node within the doc) — let ProseMirror handle those normally.
+        if (moved || !onImageUpload) return false;
+        const files = extractImageFiles(event.dataTransfer);
+        if (files.length === 0) return false;
+        event.preventDefault();
+        void uploadAndInsert(view, files, onImageUpload);
+        return true;
       },
     },
     onUpdate: ({ editor: e }) => {
@@ -159,12 +191,78 @@ export function RichTextEditor({
     // OUTER wrapper it renders around us, so we don't add one here.
     return (
       <div className={className}>
-        <RichTextToolbar editor={editor} />
+        <RichTextToolbar editor={editor} onImageUpload={onImageUpload} />
         <EditorContent editor={editor} className="px-3 py-2" />
       </div>
     );
   }
   return <EditorContent editor={editor} className={className} />;
+}
+
+/**
+ * Pull image File objects out of a ClipboardEvent's dataTransfer or a
+ * DragEvent's dataTransfer. Filters to items whose MIME type starts with
+ * "image/" so a paste with mixed content (image + text) doesn't upload
+ * the text.
+ */
+function extractImageFiles(dt: DataTransfer | null): File[] {
+  if (!dt) return [];
+  const out: File[] = [];
+  // dt.files works for drops and (for images) paste from OS.
+  for (const f of Array.from(dt.files)) {
+    if (f.type.startsWith('image/')) out.push(f);
+  }
+  // dt.items covers the Chrome/Edge "paste screenshot from clipboard" case
+  // where the image arrives as an item, not a file. Skip if we already
+  // captured them via .files to avoid double-upload.
+  if (out.length === 0) {
+    for (const item of Array.from(dt.items ?? [])) {
+      if (item.kind === 'file' && item.type.startsWith('image/')) {
+        const f = item.getAsFile();
+        if (f) out.push(f);
+      }
+    }
+  }
+  return out;
+}
+
+/**
+ * Upload each image and insert an `image` node for it at the current
+ * selection. Uploads run in parallel — most pastes are one image, so
+ * this doesn't matter in practice, but bulk drag-drop of multiple
+ * files feels much better than serial uploads.
+ *
+ * Failures are logged; a failed image just doesn't insert. Not going
+ * to surface a full error toast for a paste — that's more noise than
+ * signal for a workflow the user will just retry.
+ */
+async function uploadAndInsert(
+  view: import('@tiptap/pm/view').EditorView,
+  files: File[],
+  uploader: NonNullable<RichTextEditorProps['onImageUpload']>,
+): Promise<void> {
+  const results = await Promise.allSettled(files.map((f) => uploader(f)));
+  const state = view.state;
+  const nodes = [];
+  for (const result of results) {
+    if (result.status === 'fulfilled') {
+      nodes.push(
+        state.schema.nodes.image.create({
+          src: result.value.url,
+          alt: '',
+          width: '100%',
+        }),
+      );
+    } else {
+      // Diagnostic for a paste/drop failure — user will retry; we don't
+      // surface a full error toast because paste is a low-cost workflow.
+      console.error('inline image upload failed', result.reason);
+    }
+  }
+  if (nodes.length === 0) return;
+  const tr = state.tr;
+  for (const node of nodes) tr.insert(tr.selection.from, node);
+  view.dispatch(tr);
 }
 
 /**
