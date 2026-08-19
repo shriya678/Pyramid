@@ -52,6 +52,7 @@ export function CommentsPanel({ workspaceSlug, taskId, workspaceRole }: Comments
         submitLabel="Comment"
         placeholder="Write a comment… @ to mention a teammate"
         workspaceSlug={workspaceSlug}
+        taskId={taskId}
       />
 
       {comments.isLoading ? (
@@ -134,6 +135,7 @@ function CommentThread({
                 submitLabel="Reply"
                 placeholder="Write a reply… @ to mention a teammate"
                 workspaceSlug={workspaceSlug}
+                taskId={taskId}
               />
             </li>
           ) : null}
@@ -201,6 +203,7 @@ function CommentRow({
             submitLabel="Save"
             placeholder="Edit your comment…"
             workspaceSlug={workspaceSlug}
+            taskId={taskId}
           />
         ) : (
           <RichTextViewer doc={comment.body} className="text-sm" />

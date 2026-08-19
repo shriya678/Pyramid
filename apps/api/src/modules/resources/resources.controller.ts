@@ -49,6 +49,23 @@ export class ResourcesController {
     return this.resourcesService.signUpload(ws, taskId);
   }
 
+  /**
+   * Step 1 of the INLINE IMAGE upload flow (for images pasted or dropped
+   * into a comment editor). Returns signed params for a PUBLIC Cloudinary
+   * upload — the returned URL is embedded in the ProseMirror doc as an
+   * <img src> and needs to keep working forever without server-side
+   * signing on each read. Same tight throttle as sign-upload.
+   */
+  @Post('sign-inline-image')
+  @HttpCode(HttpStatus.OK)
+  @Throttle({ default: { limit: 20, ttl: 60 * 1000 } })
+  @ApiOperation({
+    summary: 'Return signed Cloudinary params for a PUBLIC inline image upload (comment paste).',
+  })
+  signInlineImageUpload(@CurrentWorkspace() ws: WorkspaceContext, @Param('taskId') taskId: string) {
+    return this.resourcesService.signInlineImageUpload(ws, taskId);
+  }
+
   @Post()
   @ApiOperation({
     summary:

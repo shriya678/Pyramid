@@ -8,13 +8,14 @@ import {
   Heading1,
   Heading2,
   Heading3,
+  Image as ImageIcon,
   Italic,
   List,
   ListOrdered,
   Quote,
   Strikethrough,
 } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useRef, type ChangeEvent, type ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -28,7 +29,32 @@ import { cn } from '@/lib/utils';
  * and can click the same button again to exit. Solves the "no way to
  * close a code block" complaint from QA.
  */
-export function RichTextToolbar({ editor }: { editor: Editor | null }) {
+export function RichTextToolbar({
+  editor,
+  onImageUpload,
+}: {
+  editor: Editor | null;
+  /** Optional — when provided, an "Insert image" button opens a file
+   *  picker that uploads via this handler and inserts the resulting URL. */
+  onImageUpload?: (file: File | Blob) => Promise<{ url: string; width?: number }>;
+}) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleImagePick = async (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    // Clear the input value so picking the same file twice still fires
+    // onChange — otherwise the browser dedups and users hit a dead click.
+    e.target.value = '';
+    if (!file || !onImageUpload || !editor) return;
+    try {
+      const { url } = await onImageUpload(file);
+      editor.chain().focus().setImage({ src: url }).run();
+    } catch (err) {
+      // Toolbar image-pick error; user will retry.
+      console.error('inline image upload failed', err);
+    }
+  };
+
   if (!editor) return null;
 
   return (
@@ -122,6 +148,30 @@ export function RichTextToolbar({ editor }: { editor: Editor | null }) {
           <Code2 className="h-3.5 w-3.5" />
         </ToolbarButton>
       </Group>
+
+      {/* Image group only rendered when an uploader is wired — viewer +
+          composers without a workspace context skip it entirely. */}
+      {onImageUpload ? (
+        <>
+          <Divider />
+          <Group>
+            <ToolbarButton
+              onClick={() => fileInputRef.current?.click()}
+              isActive={false}
+              label="Insert image (or paste / drag one into the editor)"
+            >
+              <ImageIcon className="h-3.5 w-3.5" />
+            </ToolbarButton>
+          </Group>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleImagePick}
+          />
+        </>
+      ) : null}
     </div>
   );
 }

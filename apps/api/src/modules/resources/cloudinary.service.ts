@@ -15,6 +15,28 @@ export interface CloudinarySignedUpload {
 }
 
 /**
+ * Signed upload params for a PUBLIC image (Cloudinary `type=upload`). Used
+ * by inline images pasted into comments — the returned URL is embedded
+ * directly in the ProseMirror doc and needs to keep working without
+ * re-signing on every read.
+ *
+ * Trade-off vs `type=authenticated`: any URL leak lets anyone view the
+ * image. Documented in README. For a task-comment attachment this is
+ * usually fine; sensitive content should still use the file-upload
+ * (authenticated) flow.
+ */
+export interface CloudinarySignedInlineImage {
+  cloudName: string;
+  apiKey: string;
+  timestamp: number;
+  signature: string;
+  folder: string;
+  uploadUrl: string;
+  resourceType: 'image';
+  type: 'upload';
+}
+
+/**
  * Wraps the Cloudinary SDK. Two operations:
  *   1. `signUpload(taskId)` — returns the params the browser needs to upload
  *      a file directly to Cloudinary (bytes never touch our server).
@@ -79,6 +101,33 @@ export class CloudinaryService {
       uploadUrl: `https://api.cloudinary.com/v1_1/${this.cloudName}/auto/upload`,
       resourceType: 'auto',
       type: 'authenticated',
+    };
+  }
+
+  /**
+   * Signed params for a PUBLIC image upload (Cloudinary `type=upload`).
+   * Used by inline images pasted into comments — the returned URL is
+   * embedded in the ProseMirror doc as an <img src> and needs to work
+   * forever without server-side signing on each read.
+   *
+   * Different folder path than task-scoped file uploads so we can tell
+   * the two apart in the Cloudinary console and reconcile independently.
+   * Bound to a task so that stray uploads still have provenance.
+   */
+  signInlineImageUpload(taskId: string): CloudinarySignedInlineImage {
+    this.requireConfigured();
+    const timestamp = Math.floor(Date.now() / 1000);
+    const folder = `${this.baseFolder}/inline-images/tasks/${taskId}`;
+    const signature = cloudinary.utils.api_sign_request({ folder, timestamp }, this.apiSecret!);
+    return {
+      cloudName: this.cloudName!,
+      apiKey: this.apiKey!,
+      timestamp,
+      signature,
+      folder,
+      uploadUrl: `https://api.cloudinary.com/v1_1/${this.cloudName}/image/upload`,
+      resourceType: 'image',
+      type: 'upload',
     };
   }
 
