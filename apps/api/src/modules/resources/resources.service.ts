@@ -9,7 +9,11 @@ import { PrismaService } from '../../prisma/prisma.service';
 import { ActivityService } from '../activity/activity.service';
 import { ProjectAccessService } from '../projects/project-access.service';
 import type { WorkspaceContext } from '../workspaces/guards/workspace-member.guard';
-import { CloudinaryService, type CloudinarySignedUpload } from './cloudinary.service';
+import {
+  CloudinaryService,
+  type CloudinarySignedInlineImage,
+  type CloudinarySignedUpload,
+} from './cloudinary.service';
 import type { CreateResourceDto } from './dto/create-resource.dto';
 
 export interface ResourceUploaderMini {
@@ -83,6 +87,21 @@ export class ResourcesService {
   async signUpload(ctx: WorkspaceContext, taskId: string): Promise<CloudinarySignedUpload> {
     await this.requireTaskInWorkspace(ctx, taskId);
     return this.cloudinary.signUpload(taskId);
+  }
+
+  /**
+   * Cloudinary signed params for an inline image (pasted or dropped into
+   * a comment). Public upload — the returned URL is embedded in the
+   * ProseMirror doc as an <img src> and needs to keep working without
+   * server-side signing on each read. Auth check same as file uploads —
+   * only workspace members with task access can sign.
+   */
+  async signInlineImageUpload(
+    ctx: WorkspaceContext,
+    taskId: string,
+  ): Promise<CloudinarySignedInlineImage> {
+    await this.requireTaskInWorkspace(ctx, taskId);
+    return this.cloudinary.signInlineImageUpload(taskId);
   }
 
   async create(
