@@ -51,6 +51,12 @@ export function richTextExtensions(opts?: {
     // render `type: 'mention'` nodes correctly. The suggestion behavior
     // (dropdown, filter, insert) only wires when opts.mentionSuggestion
     // is provided.
+    //
+    // Only SPREAD the suggestion key when we have one. Passing
+    // `suggestion: undefined` explicitly overrides Mention's default
+    // config (which sets `char: '@'`) and crashes with "Cannot read
+    // properties of undefined (reading 'char')" the moment the extension
+    // initializes — the viewer path hit this on every comment read.
     Mention.configure({
       HTMLAttributes: {
         class: 'rounded bg-primary/15 px-1 font-medium text-primary [&]:no-underline',
@@ -63,7 +69,7 @@ export function richTextExtensions(opts?: {
         { ...options.HTMLAttributes, 'data-mention-id': node.attrs.id },
         `@${node.attrs.label ?? node.attrs.id}`,
       ],
-      suggestion: opts?.mentionSuggestion,
+      ...(opts?.mentionSuggestion ? { suggestion: opts.mentionSuggestion } : {}),
     }),
   ];
 }
