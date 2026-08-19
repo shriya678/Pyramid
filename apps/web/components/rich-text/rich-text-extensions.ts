@@ -5,6 +5,7 @@ import StarterKit from '@tiptap/starter-kit';
 import type { Extensions } from '@tiptap/react';
 import type { SuggestionOptions } from '@tiptap/suggestion';
 import type { MentionItem } from './mention-suggestion-list';
+import { ResizableImage } from './resizable-image-extension';
 
 /**
  * Extension set shared by RichTextEditor + RichTextViewer so writes and
@@ -76,5 +77,9 @@ export function richTextExtensions(opts?: {
       ],
       ...(opts?.mentionSuggestion ? { suggestion: opts.mentionSuggestion } : {}),
     }),
+    // Image node with resize UI (25/50/75/100% width presets). Extends
+    // @tiptap/extension-image so the base schema (src/alt/title) is
+    // untouched — we just add a width attr + NodeView.
+    ResizableImage,
   ];
 }
