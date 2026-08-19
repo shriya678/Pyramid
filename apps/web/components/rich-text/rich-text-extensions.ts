@@ -32,6 +32,11 @@ export function richTextExtensions(opts?: {
   return [
     StarterKit.configure({
       heading: { levels: [1, 2, 3] },
+      // TipTap 3's StarterKit ships Link by default; disable it so the
+      // separately-configured @tiptap/extension-link below wins (with
+      // our autolink + target=_blank + underline styling). Leaving both
+      // registered logs "Duplicate extension names found: ['link']".
+      link: false,
     }),
     Link.configure({
       openOnClick: false,
