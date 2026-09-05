@@ -1,22 +1,20 @@
 name: Keep Render warm
 
 # Render's free tier idles a web service after ~15 minutes of no traffic;
-# waking it costs a ~30-60s cold start on the next request. That's a bad
-# first impression when a reviewer opens the live app.
+# waking it costs a ~30-60s cold start on the next request (and can push
+# past 2 minutes if Neon Postgres is also cold). That's a bad first
+# impression when a reviewer opens the live app.
 #
-# Poll /health every 10 minutes so the service never idles long enough
-# to sleep. Also fails the workflow run if the endpoint doesn't respond
-# with 200 — a red history in the Actions tab is a cheap uptime signal.
-#
-# GitHub cron schedules are best-effort (delays of 5-10 minutes under
-# load are documented) and pause after 60 days of repo inactivity. At
-# 10-minute cadence, a slipped tick still lands well inside Render's
-# 15-minute idle window.
+# Poll /health every 5 minutes so the service never idles long enough
+# to sleep. GitHub Actions cron is best-effort and often slips by
+# 10-20 minutes under load; running at */5 gives us multiple chances
+# per Render idle window to land at least one warm-up ping.
 
 on:
   schedule:
-    # Every 10 minutes. 5 minutes is the minimum GitHub allows.
-    - cron: '*/10 * * * *'
+    # Every 5 minutes — the minimum GitHub allows. GitHub cron is
+    # best-effort, so this is really "up to every 5 minutes."
+    - cron: '*/5 * * * *'
   workflow_dispatch: {}
 
 concurrency:
@@ -33,14 +31,24 @@ jobs:
 
     steps:
       - name: Curl health endpoint
+        # continue-on-error: the goal of this workflow is to send traffic,
+        # not to page us on transient Render blips. A red X on a rare cold
+        # start or platform hiccup isn't useful signal — Sentry catches
+        # real backend errors. Uptime is proved by the app working when
+        # the reviewer opens it, not by a green Actions history.
+        continue-on-error: true
         run: |
           set -euo pipefail
           URL="https://pyramid-sb7m.onrender.com/health"
           echo "Pinging $URL"
           # -sS: quiet but show errors. -f: fail on HTTP >=400.
-          # --max-time 90: cold start can take up to a minute; leave headroom.
+          # --max-time 180: cold start on a cold Render + cold Neon can
+          #   legitimately push past 90s; 3 minutes is a safer ceiling.
+          # --retry 3 --retry-delay 15 --retry-all-errors: retry on
+          #   timeout / connection reset / 5xx (a cold-start 503 is common
+          #   right before the service comes up).
           # Print the response body for the run log so we can see status/db/uptime.
-          curl -sSf --max-time 90 "$URL" | tee /tmp/health.json
+          curl -sS --fail --max-time 180 --retry 3 --retry-delay 15 --retry-all-errors "$URL" | tee /tmp/health.json
           echo
           # One-liner sanity check the JSON shape looks right.
           node -e "const j = require('/tmp/health.json'); if (j.status !== 'ok' || j.db !== 'up') { console.error('unhealthy', j); process.exit(1); }"
