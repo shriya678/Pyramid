@@ -8,7 +8,7 @@ Built as a technical assessment for a Full Stack Developer role.
 - **Live API:** https://pyramid-sb7m.onrender.com/health
 - **Swagger:** https://pyramid-sb7m.onrender.com/api/docs
 
-> **Heads-up:** the API runs on Render's free tier, which sleeps a service after ~15 minutes of no traffic. A GitHub Actions cron ([`.github/workflows/keep-warm.yml`](./.github/workflows/keep-warm.yml)) pings `/health` every 5 minutes to prevent that, so most visits are instant. If the very first request still feels slow, GitHub cron ran late — wait a beat and try again.
+> **Heads-up:** the API runs on Render's free tier, which sleeps a service after ~15 minutes of no traffic. An external uptime monitor (UptimeRobot) pings `/health` every 5 minutes to prevent that, so most visits are instant. If the very first request still feels slow, wait a beat and try again — the service is just waking up.
 
 ---
 
