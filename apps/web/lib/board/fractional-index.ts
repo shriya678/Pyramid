@@ -14,7 +14,7 @@
  *   - Middle     → (prev + next) / 2
  *
  * Repeated dragging can produce arbitrarily close midpoints; a rebalance
- * pass would be a follow-up. Not blocking for the assessment scope.
+ * pass would be a follow-up. Not blocking at current scale.
  */
 export function fractionalIndexAt(list: readonly { order: number }[], newIndex: number): number {
   const n = list.length;

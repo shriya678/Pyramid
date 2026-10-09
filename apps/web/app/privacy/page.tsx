@@ -13,7 +13,7 @@ export default function PrivacyPage() {
 
         <section className="mt-8 space-y-4 text-sm leading-relaxed text-foreground">
           <p>
-            <strong>Placeholder — not legal advice.</strong> This stub exists for an assessment
+            <strong>Placeholder — not legal advice.</strong> This stub exists for a portfolio
             project. A real privacy policy would replace it.
           </p>
           <p>

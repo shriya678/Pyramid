@@ -16,7 +16,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: 'Task Management System',
-  description: 'Task management app inspired by Jira, Linear and Notion — technical assessment.',
+  description: 'Task management app inspired by Jira, Linear and Notion.',
 };
 
 // Using an inline `{ children }` type rather than the global `LayoutProps<'/'>`
