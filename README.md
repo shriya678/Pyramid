@@ -2,7 +2,7 @@
 
 A Jira/Linear-inspired task management app: Kanban board with drag-and-drop, task detail with threaded comments and activity feed, projects, subtasks, custom per-workspace statuses, file uploads via Cloudinary, multi-workspace switching, a four-role access model, themeable UI, and full mobile responsiveness.
 
-Built as a technical assessment for a Full Stack Developer role.
+A personal full-stack project, built end to end — from data model and API design through UI, testing, CI, and deployment.
 
 - **Live web:** https://pyramid-web-sigma.vercel.app/
 - **Live API:** https://pyramid-sb7m.onrender.com/health
@@ -220,11 +220,11 @@ Full descriptions in `apps/api/.env.example` and `apps/web/.env.example`. Highli
 
 ---
 
-## Deliberate deviations from the Figma
+## Deliberate deviations from the reference design
 
-Called out honestly since the assessment weighs "attention to detail" and "product thinking":
+The UI follows a Figma reference design. Where the build intentionally departs from it, the reasoning is below:
 
-- **Teams field on Task Detail** — rendered as disabled. A full Team + TeamMember + TaskTeam model with management UI wasn't a good use of the scope budget; the four-role access model was the more product-load-bearing decision.
+- **Teams field on Task Detail** — rendered as disabled. A full Team + TeamMember + TaskTeam model with management UI wasn't the best use of a v1 time budget; the four-role access model was the more product-load-bearing decision.
 - **Live presence avatars** on the board (floating "D"/"A" badges) — rendered as **static seeded members**. WebSocket presence adds a whole realtime layer for cosmetic value in a v1.
 - **Project detail header** — Figma jumps straight to the task list; we added a compact editable header (name, priority, lead, due, edit) since otherwise projects have no post-creation edit UI.
 
@@ -240,7 +240,7 @@ Called out honestly since the assessment weighs "attention to detail" and "produ
 
 ---
 
-## What's next (if this project continued)
+## Roadmap
 
 Roughly in priority order:
 
@@ -256,4 +256,4 @@ Roughly in priority order:
 
 ## License
 
-Private — for assessment evaluation only.
+© Shriya Gupta. All rights reserved. Shared publicly as a portfolio project — feel free to read and run it; please ask before reusing the code.

@@ -10,7 +10,7 @@
 
 ### 1.1 Purpose
 
-This document defines the functional and non-functional requirements for a Jira/Linear-inspired task management application delivered as a technical assessment for a Full Stack Developer role. It captures **what the system must do** (functional requirements, §3), **how well it must do it** (non-functional requirements, §4), and **what boundaries constrain the solution** (constraints, assumptions, out-of-scope — §5–§7).
+This document defines the functional and non-functional requirements for a Jira/Linear-inspired task management application, built as a personal full-stack project. It captures **what the system must do** (functional requirements, §3), **how well it must do it** (non-functional requirements, §4), and **what boundaries constrain the solution** (constraints, assumptions, out-of-scope — §5–§7).
 
 Each requirement is written as a testable statement so acceptance can be verified directly against a live build.
 
@@ -36,7 +36,7 @@ The delivered system is a multi-tenant web application in which teams organise w
 
 ### 1.4 References
 
-- Figma design -https://www.figma.com/design/obONCFmoTFN27V5H9PHS2X/Assessment-Task?node-id=0-1&t;=y9fJEDSLMzDicrBQ-1
+- Figma reference design — 13 screens, cited below as `p1`–`p13`
 - Swagger API documentation — [live](https://pyramid-sb7m.onrender.com/api/docs)
 - ER diagram — [`docs/erd.md`](./erd.md)
 - Architecture diagram + auth sequences — [`docs/architecture.md`](./architecture.md)
@@ -80,7 +80,7 @@ Guests may upgrade to a Google account in place — the same user id, workspace,
 
 ## 3. Functional requirements
 
-Each requirement carries a unique id `FR-x.y`. Figma page references (e.g. `p2`) point to the assessment design set.
+Each requirement carries a unique id `FR-x.y`. Figma page references (e.g. `p2`) point to the Figma reference design.
 
 ### 3.1 Authentication
 
