@@ -13,12 +13,12 @@ export default function TermsPage() {
 
         <section className="mt-8 space-y-4 text-sm leading-relaxed text-foreground">
           <p>
-            <strong>Placeholder — not legal advice.</strong> This is a stub page for an assessment
+            <strong>Placeholder — not legal advice.</strong> This is a stub page for a portfolio
             project. Real terms would replace this before any production launch.
           </p>
           <p>
-            By using this application you acknowledge it is a demonstration built for a technical
-            assessment and not a production service. No warranties are offered.
+            By using this application you acknowledge it is a demonstration project and not a
+            production service. No warranties are offered.
           </p>
         </section>
 
